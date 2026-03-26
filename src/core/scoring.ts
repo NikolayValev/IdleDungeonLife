@@ -1,0 +1,74 @@
+import type { RunState } from "./types";
+
+export interface RunScore {
+  total: number;
+  dungeonDepthScore: number;
+  legacyAshScore: number;
+  survivalScore: number;
+  discoveryScore: number;
+  buildDiversityScore: number;
+  dominancePenalty: number;
+}
+
+const WEIGHTS = {
+  dungeonDepth: 40,
+  legacyAsh: 20,
+  survival: 15,
+  discovery: 15,
+  buildDiversity: 10,
+};
+
+/**
+ * Score a completed/dead run. Higher = better.
+ */
+export function scoreRun(run: RunState, discoveryCount: number): RunScore {
+  const dungeonDepthScore = run.deepestDungeonIndex * WEIGHTS.dungeonDepth;
+
+  const legacyAshScore = computeLegacyAshReward(run);
+
+  const survivalScore = Math.min(
+    WEIGHTS.survival * 10,
+    Math.floor(run.lifespan.ageSeconds / 60) * 2
+  );
+
+  const discoveryScore = discoveryCount * 5;
+
+  // Build diversity: bonus for using multiple unlocked talent branches
+  const buildDiversityScore = Math.min(
+    WEIGHTS.buildDiversity * 10,
+    run.talents.unlockedNodeIds.length * 3
+  );
+
+  // Penalty for over-relying on single mechanic (e.g. only one talent path)
+  const dominancePenalty = 0; // Placeholder for V2
+
+  const total =
+    dungeonDepthScore +
+    legacyAshScore * 0.5 +
+    survivalScore +
+    discoveryScore +
+    buildDiversityScore -
+    dominancePenalty;
+
+  return {
+    total: Math.floor(total),
+    dungeonDepthScore,
+    legacyAshScore,
+    survivalScore,
+    discoveryScore,
+    buildDiversityScore,
+    dominancePenalty,
+  };
+}
+
+/**
+ * Compute Legacy Ash reward for a run.
+ */
+export function computeLegacyAshReward(run: RunState): number {
+  const depthBonus = run.deepestDungeonIndex * 5;
+  const ageBonus = Math.floor(run.lifespan.ageSeconds / 60);
+  const bossBonus = run.bossesCleared.length * 10;
+  const dungeonBonus = run.totalDungeonsCompleted * 2;
+
+  return depthBonus + ageBonus + bossBonus + dungeonBonus;
+}
