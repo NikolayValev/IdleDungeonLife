@@ -1,38 +1,161 @@
-// ─── Balance constants ────────────────────────────────────────────────────────
-// All tunable numbers live here. Core logic must not hardcode these values.
-
 export const BALANCE = {
-  // Offline reconciliation
-  maxOfflineSec: 8 * 3600, // 8 hours maximum offline credit
-
-  // Starting gold on new run
+  maxOfflineSec: 8 * 3600,
   startingGold: 0,
   startingEssence: 0,
-
-  // Dungeon unlock: legacy ash costs
   unlockCost: {
-    grave_hollow: 5,
-    relic_vault: 15,
-    abyss_stair: 30,
-    the_silent_prelate: 50,
+    grave_hollow: 4,
+    sunken_archive: 6,
+    gilded_warehouse: 9,
+    verdant_ossuary: 12,
+    relic_vault: 18,
+    molting_god_pit: 28,
+    abyss_stair: 38,
+    the_silent_prelate: 55,
+    the_eclipsed_saint: 85,
     scavenger: 3,
-    scribe: 8,
-  } as Record<string, number>,
-
-  // Legacy ash scoring weights (see scoring.ts)
+    scribe: 6,
+  } as const,
   legacyAsh: {
     depthMultiplier: 5,
     ageMinuteMultiplier: 1,
     bossBonus: 10,
     dungeonPerCompletion: 2,
-  },
-
-  // Dungeon difficulty base threshold (score must meet this to succeed)
-  dungeonSuccessThreshold: 1.0, // multiplied by dungeon.difficulty
-
-  // Alignment drift per dungeon
-  alignmentDriftScale: 1.0,
-
-  // Trait reveal chance on discovery
+  } as const,
+  alignmentDriftScale: 1,
   traitRevealOnDiscoveryChance: 0.3,
+  itemBreakEssence: {
+    common: 1,
+    rare: 3,
+    legendary: 8,
+  } as const,
+  jobRates: {
+    porter: { goldPerSec: 0.65, essencePerSec: 0 },
+    scavenger: { goldPerSec: 1.05, essencePerSec: 0 },
+    scribe: { goldPerSec: 0.35, essencePerSec: 0.14 },
+  } as const,
+  dungeonTuning: {
+    abandoned_chapel: { goldCost: 10, durationSec: 60, difficulty: 12, vitalityWear: 3 },
+    grave_hollow: { goldCost: 18, durationSec: 75, difficulty: 18, vitalityWear: 5 },
+    sunken_archive: { goldCost: 30, durationSec: 95, difficulty: 22, vitalityWear: 6 },
+    gilded_warehouse: { goldCost: 42, durationSec: 105, difficulty: 27, vitalityWear: 7 },
+    verdant_ossuary: { goldCost: 56, durationSec: 115, difficulty: 31, vitalityWear: 9 },
+    relic_vault: { goldCost: 72, durationSec: 130, difficulty: 38, vitalityWear: 10 },
+    molting_god_pit: { goldCost: 90, durationSec: 150, difficulty: 49, vitalityWear: 18 },
+    abyss_stair: { goldCost: 118, durationSec: 175, difficulty: 56, vitalityWear: 14 },
+    the_silent_prelate: { goldCost: 180, durationSec: 240, difficulty: 72, vitalityWear: 24 },
+    the_eclipsed_saint: { goldCost: 255, durationSec: 300, difficulty: 90, vitalityWear: 30 },
+  } as const,
+  talentCosts: {
+    spine_0_initiate: 4,
+    spine_1_focused: 8,
+    spine_2_seasoned: 14,
+    spine_3_veteran: 22,
+    spine_4_crossroads: 32,
+    spine_5_apex: 48,
+    holy_1_light: 10,
+    holy_2_ministry: 14,
+    holy_3_sanctuary: 20,
+    holy_4_tithe: 28,
+    holy_5_consecration: 38,
+    holy_6_reliquary: 52,
+    holy_7_transfiguration: 68,
+    abyss_1_hunger: 10,
+    abyss_2_corruption: 14,
+    abyss_3_pact: 20,
+    abyss_4_black_ledger: 28,
+    abyss_5_gravecraft: 38,
+    abyss_6_marrow_engine: 52,
+    abyss_7_consumed: 68,
+  } as const,
+  loot: {
+    bonusDropChancePerItemFind: 0.28,
+    itemFindRareWeight: 20,
+    rareDifficultyWeight: 0.18,
+    rareAlignmentWeight: 0.06,
+    legendaryDifficultyWeight: 0.12,
+    legendaryAlignmentWeight: 0.08,
+    legendaryStatWeight: 40,
+    tables: {
+      loot_chapel: {
+        baseDropCount: 1,
+        goldMin: 9,
+        goldMax: 20,
+        essenceMin: 1,
+        essenceMax: 4,
+        rarityWeights: { common: 84, rare: 14, legendary: 1 },
+      },
+      loot_grave: {
+        baseDropCount: 1,
+        goldMin: 16,
+        goldMax: 32,
+        essenceMin: 2,
+        essenceMax: 6,
+        rarityWeights: { common: 72, rare: 20, legendary: 3 },
+      },
+      loot_archive: {
+        baseDropCount: 1,
+        goldMin: 22,
+        goldMax: 42,
+        essenceMin: 3,
+        essenceMax: 8,
+        rarityWeights: { common: 64, rare: 24, legendary: 5 },
+      },
+      loot_gilded: {
+        baseDropCount: 1,
+        goldMin: 30,
+        goldMax: 52,
+        essenceMin: 2,
+        essenceMax: 8,
+        rarityWeights: { common: 62, rare: 26, legendary: 4 },
+      },
+      loot_ossuary: {
+        baseDropCount: 1,
+        goldMin: 36,
+        goldMax: 60,
+        essenceMin: 4,
+        essenceMax: 10,
+        rarityWeights: { common: 60, rare: 27, legendary: 5 },
+      },
+      loot_vault: {
+        baseDropCount: 1,
+        goldMin: 45,
+        goldMax: 74,
+        essenceMin: 5,
+        essenceMax: 12,
+        rarityWeights: { common: 52, rare: 32, legendary: 7 },
+      },
+      loot_molting: {
+        baseDropCount: 2,
+        goldMin: 55,
+        goldMax: 92,
+        essenceMin: 7,
+        essenceMax: 16,
+        rarityWeights: { common: 40, rare: 38, legendary: 10 },
+      },
+      loot_abyss: {
+        baseDropCount: 2,
+        goldMin: 70,
+        goldMax: 112,
+        essenceMin: 8,
+        essenceMax: 18,
+        rarityWeights: { common: 34, rare: 40, legendary: 13 },
+      },
+      loot_prelate: {
+        baseDropCount: 2,
+        goldMin: 120,
+        goldMax: 180,
+        essenceMin: 14,
+        essenceMax: 28,
+        rarityWeights: { common: 20, rare: 42, legendary: 16 },
+      },
+      loot_eclipsed: {
+        baseDropCount: 2,
+        goldMin: 150,
+        goldMax: 220,
+        essenceMin: 18,
+        essenceMax: 36,
+        rarityWeights: { common: 12, rare: 46, legendary: 22 },
+      },
+    } as const,
+  } as const,
 } as const;

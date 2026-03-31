@@ -7,6 +7,7 @@ const TABS = [
   { key: "DungeonsScene", label: "Dungeons" },
   { key: "InventoryScene", label: "Inventory" },
   { key: "TalentsScene", label: "Talents" },
+  { key: "CodexScene", label: "Codex" },
 ];
 
 /**
@@ -36,24 +37,25 @@ export class HudScene extends BaseScene {
     const now = this.nowUnixSec;
     this.dispatch({ type: "TICK", nowUnixSec: now });
 
-    // Check for death
-    const run = this.saveFile.currentRun;
+    let run = this.saveFile.currentRun;
+    // Auto-complete dungeon
+    if (run?.currentDungeon && now >= run.currentDungeon.completesAtUnixSec) {
+      this.dispatch({ type: "COMPLETE_DUNGEON", nowUnixSec: now });
+      run = this.saveFile.currentRun;
+    }
+
+    // Check for death after all state transitions for this tick.
     if (run && !run.alive && !run.currentDungeon) {
       this.dispatchDeathIfNeeded();
     }
 
-    // Auto-complete dungeon
-    if (run?.currentDungeon && now >= run.currentDungeon.completesAtUnixSec) {
-      this.dispatch({ type: "COMPLETE_DUNGEON", nowUnixSec: now });
-    }
-
     this.updateHud();
+    this.refreshActiveContentScenes();
   }
 
   private dispatchDeathIfNeeded(): void {
-    const run = this.saveFile.currentRun;
-    if (run && !run.alive) {
-      this.scene.start("DeathScene");
+    if (!this.scene.isActive("DeathScene")) {
+      this.showTab("DeathScene");
     }
   }
 
@@ -97,8 +99,29 @@ export class HudScene extends BaseScene {
     (vitalText as any).__hudElement = true;
   }
 
+  private refreshActiveContentScenes(): void {
+    const run = this.saveFile.currentRun;
+    if (!run?.alive) return;
+
+    this.scene.manager.scenes
+      .filter((scene) => {
+        const key = scene.scene.key;
+        return scene.scene.isActive() && key !== "HudScene" && key !== "DeathScene";
+      })
+      .forEach((scene) => scene.scene.restart());
+  }
+
   private drawTabBar(): void {
     const barY = LAYOUT.height - LAYOUT.tabBarHeight;
+    const columns = 3;
+    const rows = Math.ceil(TABS.length / columns);
+    const gutter = 8;
+    const horizontalPadding = 10;
+    const verticalPadding = 10;
+    const tabWidth =
+      (LAYOUT.width - horizontalPadding * 2 - gutter * (columns - 1)) / columns;
+    const tabHeight =
+      (LAYOUT.tabBarHeight - verticalPadding * 2 - gutter * (rows - 1)) / rows;
 
     this.add.rectangle(
       LAYOUT.width / 2,
@@ -108,26 +131,47 @@ export class HudScene extends BaseScene {
       0x111111
     );
 
-    const tabWidth = LAYOUT.width / TABS.length;
     TABS.forEach((tab, i) => {
-      const x = i * tabWidth + tabWidth / 2;
-      const y = barY + LAYOUT.tabBarHeight / 2;
+      const column = i % columns;
+      const row = Math.floor(i / columns);
+      const x =
+        horizontalPadding + column * (tabWidth + gutter) + tabWidth / 2;
+      const y =
+        barY + verticalPadding + row * (tabHeight + gutter) + tabHeight / 2;
+      const bg = this.add
+        .rectangle(x, y, tabWidth, tabHeight, 0x171722, 0.95)
+        .setStrokeStyle(1, 0x2b2b3f, 1)
+        .setInteractive({ useHandCursor: true });
 
       const btn = this.add
         .text(x, y, tab.label, {
           fontFamily: FONTS.body,
-          fontSize: "13px",
+          fontSize: "12px",
           color: COLORS.textPrimary,
+          align: "center",
         })
-        .setOrigin(0.5, 0.5)
-        .setInteractive({ useHandCursor: true });
+        .setOrigin(0.5, 0.5);
 
-      btn.on("pointerup", () => {
-        this.scene.start(tab.key);
-      });
+      const activate = () => {
+        this.showTab(tab.key);
+      };
 
-      btn.on("pointerover", () => btn.setColor(COLORS.accent));
-      btn.on("pointerout", () => btn.setColor(COLORS.textPrimary));
+      const hoverIn = () => {
+        bg.setFillStyle(0x212136, 1);
+        btn.setColor(COLORS.accent);
+      };
+      const hoverOut = () => {
+        bg.setFillStyle(0x171722, 0.95);
+        btn.setColor(COLORS.textPrimary);
+      };
+
+      bg.on("pointerup", activate);
+      btn.setInteractive({ useHandCursor: true });
+      btn.on("pointerup", activate);
+      bg.on("pointerover", hoverIn);
+      btn.on("pointerover", hoverIn);
+      bg.on("pointerout", hoverOut);
+      btn.on("pointerout", hoverOut);
     });
   }
 }

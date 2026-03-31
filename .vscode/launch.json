@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Idle Dungeon Life: Launch Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:5174",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "dev:start"
+    },
+    {
+      "name": "Idle Dungeon Life: Restart and Launch Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:5174",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "dev:restart"
+    },
+    {
+      "name": "Idle Dungeon Life: Open Running App in Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:5174",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}

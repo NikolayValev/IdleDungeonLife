@@ -114,6 +114,7 @@ export function createDebugActions(
         currentRun: {
           ...save.currentRun,
           alive: false,
+          currentJobId: null,
           lifespan: { ...save.currentRun.lifespan, vitality: 0 },
         },
       });

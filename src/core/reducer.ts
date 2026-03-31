@@ -21,6 +21,16 @@ function makeInstanceId(): string {
   return `inst_${Date.now()}_${++_instanceCounter}`;
 }
 
+function makeCodexEntryId(kind: "item" | "trait", id: string): string {
+  return `${kind}:${id}`;
+}
+
+function brokenItemEssence(itemId: string): number {
+  const def = ITEM_REGISTRY.get(itemId);
+  if (!def) return 0;
+  return BALANCE.itemBreakEssence[def.rarity];
+}
+
 function clampAlignment(v: number): number {
   return Math.max(-100, Math.min(100, v));
 }
@@ -153,7 +163,11 @@ function applyTick(run: RunState, nowUnixSec: number): RunState {
 
   // Lifespan decay
   const { lifespan, died } = tickLifespan(updated.lifespan, stats, elapsed);
-  updated = { ...updated, lifespan };
+  updated = {
+    ...updated,
+    lifespan,
+    currentJobId: died ? null : updated.currentJobId,
+  };
 
   if (died) {
     updated = { ...updated, alive: false };
@@ -287,9 +301,11 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       // Discoveries
       const newDiscoveries = new Set(state.meta.discoveredItemIds);
       const newTraitDiscoveries = new Set(state.meta.discoveredTraitIds);
+      const newCodexEntries = new Set(state.meta.codexEntries);
 
       for (const inst of loot.items) {
         newDiscoveries.add(inst.itemId);
+        newCodexEntries.add(makeCodexEntryId("item", inst.itemId));
         trackEvent("item_found", { itemId: inst.itemId, dungeonId: dungeon.id });
       }
 
@@ -307,6 +323,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             newVisible.push(tid);
             newHidden.splice(newHidden.indexOf(tid), 1);
             newTraitDiscoveries.add(tid);
+            newCodexEntries.add(makeCodexEntryId("trait", tid));
           }
         }
       }
@@ -348,6 +365,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           ...state.meta,
           discoveredItemIds: [...newDiscoveries],
           discoveredTraitIds: [...newTraitDiscoveries],
+          codexEntries: [...newCodexEntries],
           unlockedDungeonIds: newUnlockedDungeons,
           unlockedJobIds: newUnlockedJobs,
         },
@@ -355,6 +373,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           ...state.currentRun,
           alive: !died,
           currentDungeon: null,
+          currentJobId: died ? null : state.currentRun.currentJobId,
           lifespan: newLifespan,
           alignment: { holyUnholy: newAlignment },
           visibleTraitIds: newVisible,
@@ -401,6 +420,49 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       return {
         ...state,
         currentRun: { ...state.currentRun, equipment: newEquipment },
+      };
+    }
+
+    case "BREAK_ITEM": {
+      if (!state.currentRun?.alive) return state;
+
+      const inst = state.currentRun.inventory.items.find(
+        (item) => item.instanceId === event.itemInstanceId
+      );
+      if (!inst) return state;
+
+      const def = ITEM_REGISTRY.get(inst.itemId);
+      if (!def) return state;
+
+      const essence = brokenItemEssence(inst.itemId);
+      const newEquipment = { ...state.currentRun.equipment };
+      (["weapon", "armor", "artifact"] as const).forEach((slot) => {
+        if (newEquipment[slot] === inst.instanceId) {
+          delete newEquipment[slot];
+        }
+      });
+
+      trackEvent("item_broken", {
+        itemId: inst.itemId,
+        rarity: def.rarity,
+        essence,
+      });
+
+      return {
+        ...state,
+        currentRun: {
+          ...state.currentRun,
+          equipment: newEquipment,
+          inventory: {
+            items: state.currentRun.inventory.items.filter(
+              (item) => item.instanceId !== event.itemInstanceId
+            ),
+          },
+          resources: {
+            ...state.currentRun.resources,
+            essence: state.currentRun.resources.essence + essence,
+          },
+        },
       };
     }
 
@@ -454,6 +516,10 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         ...run.visibleTraitIds,
         ...run.hiddenTraitIds,
       ]);
+      const newCodexEntries = new Set(state.meta.codexEntries);
+      for (const tid of [...run.visibleTraitIds, ...run.hiddenTraitIds]) {
+        newCodexEntries.add(makeCodexEntryId("trait", tid));
+      }
 
       trackEvent("run_died", {
         seed: run.seed,
@@ -476,6 +542,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           ...state.meta,
           legacyAsh: state.meta.legacyAsh + ashEarned,
           discoveredTraitIds: [...newDiscoveredTraits],
+          codexEntries: [...newCodexEntries],
         },
         currentRun: null,
       };

@@ -13,6 +13,7 @@ export type AnalyticsEventName =
   | "dungeon_completed"
   | "item_found"
   | "item_equipped"
+  | "item_broken"
   | "talent_unlocked"
   | "alignment_shifted"
   | "run_died"

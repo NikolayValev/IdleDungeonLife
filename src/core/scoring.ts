@@ -10,6 +10,14 @@ export interface RunScore {
   dominancePenalty: number;
 }
 
+export interface LegacyAshBreakdown {
+  total: number;
+  depthBonus: number;
+  ageBonus: number;
+  bossBonus: number;
+  dungeonBonus: number;
+}
+
 const WEIGHTS = {
   dungeonDepth: 40,
   legacyAsh: 20,
@@ -22,7 +30,8 @@ const WEIGHTS = {
  * Score a completed/dead run. Higher = better.
  */
 export function scoreRun(run: RunState, discoveryCount: number): RunScore {
-  const dungeonDepthScore = run.deepestDungeonIndex * WEIGHTS.dungeonDepth;
+  const clearedDepth = Math.max(0, run.deepestDungeonIndex);
+  const dungeonDepthScore = clearedDepth * WEIGHTS.dungeonDepth;
 
   const legacyAshScore = computeLegacyAshReward(run);
 
@@ -64,11 +73,21 @@ export function scoreRun(run: RunState, discoveryCount: number): RunScore {
 /**
  * Compute Legacy Ash reward for a run.
  */
-export function computeLegacyAshReward(run: RunState): number {
-  const depthBonus = run.deepestDungeonIndex * 5;
+export function computeLegacyAshBreakdown(run: RunState): LegacyAshBreakdown {
+  const depthBonus = Math.max(0, run.deepestDungeonIndex) * 5;
   const ageBonus = Math.floor(run.lifespan.ageSeconds / 60);
   const bossBonus = run.bossesCleared.length * 10;
   const dungeonBonus = run.totalDungeonsCompleted * 2;
 
-  return depthBonus + ageBonus + bossBonus + dungeonBonus;
+  return {
+    total: depthBonus + ageBonus + bossBonus + dungeonBonus,
+    depthBonus,
+    ageBonus,
+    bossBonus,
+    dungeonBonus,
+  };
+}
+
+export function computeLegacyAshReward(run: RunState): number {
+  return computeLegacyAshBreakdown(run).total;
 }

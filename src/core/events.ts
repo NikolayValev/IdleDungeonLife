@@ -8,6 +8,7 @@ export type GameEvent =
   | { type: "COMPLETE_DUNGEON"; nowUnixSec: number }
   | { type: "EQUIP_ITEM"; itemInstanceId: string }
   | { type: "UNEQUIP_ITEM"; slot: "weapon" | "armor" | "artifact" }
+  | { type: "BREAK_ITEM"; itemInstanceId: string }
   | { type: "UNLOCK_TALENT"; nodeId: string }
   | { type: "CLAIM_DEATH"; nowUnixSec: number }
   | { type: "RECONCILE_OFFLINE"; nowUnixSec: number };

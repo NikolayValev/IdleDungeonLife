@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:start": "powershell -ExecutionPolicy Bypass -File scripts/dev-start.ps1",
+    "dev:restart": "powershell -ExecutionPolicy Bypass -File scripts/dev-start.ps1 -ForceRestart",
+    "dev:status": "powershell -ExecutionPolicy Bypass -File scripts/dev-status.ps1",
+    "dev:stop": "powershell -ExecutionPolicy Bypass -File scripts/dev-stop.ps1",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "typescript": "~5.9.3",
     "vite": "^8.0.1"
   },

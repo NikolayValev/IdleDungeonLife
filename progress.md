@@ -1,0 +1,49 @@
+Original prompt: help me run this
+
+2026-03-30
+- Installed npm dependencies and confirmed the Vite dev server is serving on http://127.0.0.1:5174/.
+- Follow-up prompt: "its runnomg help me debug and e2e test"
+- Current focus: inspect live Phaser scenes, capture browser errors, and turn findings into reproducible debug/e2e coverage.
+- Added dev-only browser test hooks in `src/app/bootstrap.ts`:
+- `window.__game` for direct scene inspection in dev.
+- `window.__test` helpers for dispatching events, restarting scenes, switching tabs, resetting runs, and advancing time.
+- `window.render_game_to_text()` and `window.advanceTime(ms)` for deterministic browser-side inspection.
+- Fixed the missing favicon request by wiring `index.html` to `public/favicon.svg`.
+- Fixed HUD navigation: tab clicks now swap content scenes without stopping `HudScene`, so the HUD remains visible and the tick loop keeps running.
+- Fixed death flow navigation: automatic death transition now replaces the current content scene cleanly, and `DeathScene` can start a fresh run back into `MainScene` while preserving the HUD.
+- Fixed ash scoring for runs that never cleared a dungeon by clamping negative depth contribution in `src/core/scoring.ts`.
+- Fixed stale content-scene timers by having `HudScene` refresh active non-death content scenes after each one-second tick. This updates dungeon countdown text and other time-based content without dropping the HUD.
+- Added VS Code launch/task wiring under `.vscode/` so the managed dev server can be started, restarted, stopped, and launched in Chrome directly from VS Code.
+- Added a new `CodexScene` and HUD tab for discovery browsing.
+- The codex shows known traits and items, summary counts, archive count, and paged browsing that survives the per-second scene refreshes.
+- `meta.codexEntries` is now populated when item and trait discoveries are archived instead of staying unused.
+- Expanded the codex with discovery filters (`Known`, `Unknown`, `All`) and section-specific facet filters for trait tags and item slots/rarities.
+- Undiscovered codex entries now render as placeholders with reveal hints instead of disappearing completely, so hidden traits and future gear still telegraph how they can be found.
+- Hardened run reset behavior for jobs: dead runs now clear `currentJobId`, debug kill also clears the active job, and the e2e progression test now verifies there is no active job on the death screen carry-over or after beginning a new run.
+- Reworked the HUD tab bar so each nav item sits inside its own button tile. Long labels now use compact two-line rendering (`Dungeons`, `Inventory`) instead of colliding with adjacent tabs.
+- Reworked the HUD nav again after reviewing it in-browser: the footer is now a clean 3x2 button grid so full labels fit without awkward word breaks.
+- Added item breaking/salvage in the inventory flow. Items can now be broken for essence by rarity, equipped items are automatically unequipped when broken, and the active-run e2e spec verifies the item is removed, the slot clears, and essence is refunded.
+- Refined the inventory action UI after a browser pass: salvage now uses chip-style buttons and a break icon instead of noisy inline bracket text, which keeps the item rows readable.
+- Tightened overall text clarity by sharpening the scaled canvas in `index.html`, disabling render antialiasing/rounding subpixel blur in `bootstrap.ts`, and nudging the shared text palette brighter in `theme.ts`.
+- Tightened inventory button readability further: chip labels now render above their backgrounds, use stronger contrast, and use bolder higher-resolution text so the action buttons stay crisp after the global sharpening pass.
+- Rebuilt the inventory row layout so right-side controls reserve space first. Slot tags now anchor against the remaining gap, which removes the `Equipped` / slot overlap in backpack rows.
+- Expanded death/meta progression feedback: `DeathScene` now shows a legacy ash breakdown, total ash after claim, new codex entries from the run, newly affordable unlocks, and the next ash-gated targets. Progression e2e coverage now checks the new death summary content.
+- Added a checked-in Playwright smoke test using the dev hooks in `src/app/bootstrap.ts`.
+- Added `playwright.config.ts`, `tests/e2e/global-setup.ts`, and `tests/e2e/global-teardown.ts`.
+- Added npm scripts: `test:e2e` and `test:e2e:headed`.
+- The Playwright setup reuses an already-running dev server when present and only stops the server if the test command started it.
+- Split the original broad smoke test into focused specs:
+- `tests/e2e/run-flow.spec.ts` for active-run gameplay behavior.
+- `tests/e2e/progression.spec.ts` for legacy ash carry-over and unlock progression.
+- `tests/e2e/codex.spec.ts` for codex UI behavior, paging, unknown placeholders, and reveal hints.
+- Added `tests/e2e/helpers.ts` to keep browser-state and scene-interaction helpers shared.
+- Verified in-browser flows with Playwright against http://127.0.0.1:5174/:
+- HUD tab click to Jobs keeps the HUD active.
+- Assign Porter, advance time, and confirm gold accrues.
+- Start and complete Abandoned Chapel, confirm rewards and alignment change.
+- Verify countdown text now changes in both `DungeonsScene` (`60s` -> `57s`) and `MainScene` (`60s` -> `58s`) over a two-second wait.
+- Grant/equip an item and unlock the first talent.
+- Trigger death, verify death screen, then start a new run and confirm the app returns to `MainScene` with `HudScene` active.
+- `npm run test:e2e` passes locally against Edge on Windows with 4 focused specs.
+- `npm run build` passes after the fixes.
+- Current production build still emits Vite's large-chunk warning for the main bundle; functionality is fine, but chunking is an obvious future cleanup target.

@@ -26,6 +26,24 @@ export abstract class BaseScene extends Phaser.Scene {
 
   /** Navigate to a named scene tab. */
   protected showTab(sceneKey: string): void {
-    this.scene.start(sceneKey);
+    const keysToStop = this.scene.manager.scenes
+      .filter((scene) => {
+        const key = scene.scene.key;
+        return scene.scene.isActive() && key !== "HudScene" && key !== sceneKey;
+      })
+      .map((scene) => scene.scene.key);
+
+    const targetScene = this.scene.get(sceneKey);
+    if (targetScene.scene.isActive()) {
+      targetScene.scene.restart();
+    } else {
+      this.scene.run(sceneKey);
+    }
+
+    keysToStop.forEach((key) => this.scene.stop(key));
+    this.scene.bringToTop(sceneKey);
+    if (this.scene.isActive("HudScene")) {
+      this.scene.bringToTop("HudScene");
+    }
   }
 }
