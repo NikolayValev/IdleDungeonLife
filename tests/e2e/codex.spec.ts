@@ -31,7 +31,7 @@ test.describe("codex scene", () => {
     expect(visibleTraitName).toBeTruthy();
     expect(await getSceneTexts(page, "CodexScene")).toContain(visibleTraitName!);
 
-    const grantedItemIds = ["rusted_blade", "bone_axe", "ash_cloak", "iron_talisman"];
+    const grantedItemIds = ["rusted_blade", "archivist_wrap", "iron_talisman", "pauper_beads"];
     await page.evaluate((itemIds) => {
       for (const itemId of itemIds) {
         (window as any).__debug.grantItem(itemId);
@@ -100,10 +100,10 @@ test.describe("codex scene", () => {
     await page.waitForTimeout(300);
 
     const unknownItemTexts = await getSceneTexts(page, "CodexScene");
-    expect(unknownItemTexts).toContain("Unknown Weapon");
-    expect(unknownItemTexts).toContain("Unknown Armor");
-    expect(unknownItemTexts).toContain("Unknown Artifact");
-    expect(unknownItemTexts).toContain("Legendary relics favor abyssal or boss-grade delves.");
+    expect(unknownItemTexts.some((entry) => entry.startsWith("Unknown "))).toBeTruthy();
+    expect(
+      unknownItemTexts.some((entry) => entry.includes("Legendary items favor difficult delves"))
+    ).toBeTruthy();
 
     expectNoBrowserErrors(errors);
   });

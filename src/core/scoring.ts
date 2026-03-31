@@ -1,4 +1,5 @@
 import type { RunState } from "./types";
+import { BALANCE } from "../content/balance";
 
 export interface RunScore {
   total: number;
@@ -74,10 +75,15 @@ export function scoreRun(run: RunState, discoveryCount: number): RunScore {
  * Compute Legacy Ash reward for a run.
  */
 export function computeLegacyAshBreakdown(run: RunState): LegacyAshBreakdown {
-  const depthBonus = Math.max(0, run.deepestDungeonIndex) * 5;
-  const ageBonus = Math.floor(run.lifespan.ageSeconds / 60);
-  const bossBonus = run.bossesCleared.length * 10;
-  const dungeonBonus = run.totalDungeonsCompleted * 2;
+  const depthBonus =
+    Math.max(0, run.deepestDungeonIndex) * BALANCE.legacyAsh.depthMultiplier;
+  const ageBonus =
+    Math.floor(run.lifespan.ageSeconds / 60) *
+    BALANCE.legacyAsh.ageMinuteMultiplier;
+  const bossBonus =
+    run.bossesCleared.length * BALANCE.legacyAsh.bossBonus;
+  const dungeonBonus =
+    run.totalDungeonsCompleted * BALANCE.legacyAsh.dungeonPerCompletion;
 
   return {
     total: depthBonus + ageBonus + bossBonus + dungeonBonus,

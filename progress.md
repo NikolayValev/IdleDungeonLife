@@ -47,3 +47,39 @@ Original prompt: help me run this
 - `npm run test:e2e` passes locally against Edge on Windows with 4 focused specs.
 - `npm run build` passes after the fixes.
 - Current production build still emits Vite's large-chunk warning for the main bundle; functionality is fine, but chunking is an obvious future cleanup target.
+
+2026-03-31
+- Follow-up prompt: "QA PROMPT — CONTENT EXPANSION (SAFE, SYSTEM-COMPATIBLE)"
+- Expanded content without changing reducer signatures, event types, save shapes, RNG interface, or simulation step contracts.
+- Traits now total 16 and every trait now carries at least one downside; alignment-driving and lifecycle-reactive traits were added across holy, unholy, decay, vitality, knowledge, wealth, and fate tags.
+- Items now total 50 with a 20 common / 20 rare / 10 legendary split. Rare+ gear now always carries at least one conditional modifier, and the legendary set now leans into alignment gating, dungeon specialization, and lifecycle manipulation.
+- Dungeons now total 10, including three added mid-tier paths, a high-wear `molting_god_pit`, and a second boss dungeon `the_eclipsed_saint`.
+- Talents now total 20 nodes with a longer core spine, wider holy and abyss branches, and cross-branch prerequisite links for the deeper capstones.
+- Moved dungeon tuning, job rates, talent costs, loot rarity weights, and legacy-ash scoring constants into `src/content/balance.ts`.
+- Refactored loot tables to bias drops by dungeon tag identity and added reducer-side rarity scaling by dungeon difficulty and alignment synergy while still using the seeded RNG provider.
+- Added `src/content/codex.ts` so Codex can render future placeholder entries with source/tag hints alongside undiscovered real entries.
+- Added simple paging to `DungeonsScene` and `TalentsScene` so the expanded datasets remain reachable in UI without touching core state flow.
+- Updated e2e coverage so it now asserts an added dungeon can be unlocked/reached, an actual dungeon drop from new content flow can be equipped, and Codex reflects fresh discoveries.
+- Validation:
+- `npm run build` passes.
+- `npm run test:e2e` passes with 4/4 specs green.
+- Current bundle still triggers Vite's large-chunk warning; content expansion did not address chunk splitting.
+- Follow-up prompt: "next"
+- Fixed the missing abyss/unholy talent visibility issue by adding branch filters to `TalentsScene` (`All`, `Core`, `Holy`, `Abyss`) instead of relying on late-page ordering.
+- Extended the active-run e2e spec so it explicitly switches to the abyss filter and verifies `Hollow Hunger` is visible.
+- Re-ran validation after the UI change:
+- `npm run build` passes.
+- `npm run test:e2e` passes with 4/4 specs green.
+- Remaining bug note in `bugs.md`: dungeon/job unlock reset behavior across runs. Current implementation and tests still treat those unlocks as meta progression, so changing that will require deciding whether reset should also change legacy-ash spending semantics.
+- Follow-up prompt: "QA PROMPT — HARDENING (DETERMINISTIC CORE + SIMULATION)"
+- Added a pure headless simulation path under `src/sim/` with `stepRun`, baseline policy decisions, run scoring, and deterministic batch execution, then re-exported the stepper from `src/step.ts`.
+- Removed browser mutation leakage from debug tooling by routing unlock/resource/item/death debug actions through reducer events instead of direct save-file edits.
+- Hardened reducer determinism by replacing time-based loot instance ids with seeded deterministic ids and by making offline reconciliation advance through dungeon completion boundaries before applying remaining elapsed time.
+- Added save-version parsing and migration stubs in `src/core/save.ts`, including validation for old and future save payloads.
+- Added analytics sink plumbing in `src/core/analytics.ts` with a deterministic local array sink so reducer-side event emission no longer depends on UI logging.
+- Added a dedicated unit-test harness (`npm run test:unit`) plus reducer, determinism, offline reconciliation, save/migration, analytics, simulation, and architecture tests under `tests/unit/`.
+- Split the build into explicit Vite chunks (`phaser`, `content`, `ui-scenes`, `core-sim`) and lazy-loaded bootstrap from `src/main.ts` so the previous large content-bundle warning is no longer the dominant build issue.
+- Validation:
+- `npm run build` passes.
+- `npm run test:unit` passes.
+- `npm run test:e2e` passes with 4/4 specs green.

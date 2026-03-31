@@ -28,10 +28,11 @@ export class ConsoleAnalyticsSink implements AnalyticsSink {
 }
 
 export class LocalArrayAnalyticsSink implements AnalyticsSink {
-  readonly events: Array<{ name: string; payload: Record<string, unknown>; ts: number }> = [];
+  readonly events: Array<{ name: string; payload: Record<string, unknown>; seq: number }> = [];
+  private nextSeq = 0;
 
   track(eventName: string, payload: Record<string, unknown>): void {
-    this.events.push({ name: eventName, payload, ts: Date.now() });
+    this.events.push({ name: eventName, payload, seq: this.nextSeq++ });
   }
 
   flush(): typeof this.events {

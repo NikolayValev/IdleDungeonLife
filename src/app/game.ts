@@ -3,8 +3,6 @@ import type { SaveFile } from "../core/types";
 import type { GameEvent } from "../core/events";
 import { reduceGame, reconcileOffline } from "../core/reducer";
 import { saveToDisk, loadFromDisk, freshSave } from "../core/save";
-import { DUNGEON_REGISTRY } from "../content/dungeons";
-import { JOB_REGISTRY } from "../content/jobs";
 
 /**
  * Central game controller — owns save state and dispatches events to the reducer.
@@ -34,40 +32,11 @@ export class GameController extends Phaser.Game {
   }
 
   unlockDungeon(dungeonId: string): void {
-    const save = this.saveFile;
-    if (save.meta.unlockedDungeonIds.includes(dungeonId)) return;
-    const dungeon = DUNGEON_REGISTRY.get(dungeonId);
-    if (!dungeon) return;
-    const cost = dungeon.unlockRequirement?.legacyAsh ?? 0;
-    if (save.meta.legacyAsh < cost) return;
-
-    this.saveFile = {
-      ...save,
-      meta: {
-        ...save.meta,
-        legacyAsh: save.meta.legacyAsh - cost,
-        unlockedDungeonIds: [...save.meta.unlockedDungeonIds, dungeonId],
-      },
-    };
-    saveToDisk(this.saveFile);
+    this.dispatch({ type: "UNLOCK_DUNGEON", dungeonId });
   }
 
   unlockJob(jobId: string): void {
-    const save = this.saveFile;
-    if (save.meta.unlockedJobIds.includes(jobId)) return;
-    const job = JOB_REGISTRY.get(jobId);
-    const cost = job?.unlockRequirement?.legacyAsh ?? 0;
-    if (save.meta.legacyAsh < cost) return;
-
-    this.saveFile = {
-      ...save,
-      meta: {
-        ...save.meta,
-        legacyAsh: save.meta.legacyAsh - cost,
-        unlockedJobIds: [...save.meta.unlockedJobIds, jobId],
-      },
-    };
-    saveToDisk(this.saveFile);
+    this.dispatch({ type: "UNLOCK_JOB", jobId });
   }
 
   /** Auto-persist every 10 seconds in case of crash. */

@@ -4,6 +4,9 @@ import { DUNGEONS } from "../../content/dungeons";
 import { computeDungeonScore, resolveDungeonOutcome } from "../../core/stats";
 
 const P = LAYOUT.padding;
+const CONTENT_BOTTOM = LAYOUT.height - LAYOUT.tabBarHeight - 8;
+const DUNGEONS_PER_PAGE = 3;
+let currentDungeonPage = 0;
 
 export class DungeonsScene extends BaseScene {
   constructor() {
@@ -21,8 +24,14 @@ export class DungeonsScene extends BaseScene {
     const run = this.saveFile.currentRun;
     const meta = this.saveFile.meta;
     let y = LAYOUT.hudHeight + 40;
+    const totalPages = Math.max(1, Math.ceil(DUNGEONS.length / DUNGEONS_PER_PAGE));
+    currentDungeonPage = Math.min(currentDungeonPage, totalPages - 1);
+    const visibleDungeons = DUNGEONS.slice(
+      currentDungeonPage * DUNGEONS_PER_PAGE,
+      (currentDungeonPage + 1) * DUNGEONS_PER_PAGE
+    );
 
-    for (const dungeon of DUNGEONS) {
+    for (const dungeon of visibleDungeons) {
       const isUnlocked = meta.unlockedDungeonIds.includes(dungeon.id);
       const isActive = run?.currentDungeon?.dungeonId === dungeon.id;
       const canAfford = run ? run.resources.gold >= dungeon.goldCost : false;
@@ -144,9 +153,39 @@ export class DungeonsScene extends BaseScene {
       }
 
       y += 106;
-      if (y > CONTENT_BOTTOM - 106) break; // basic overflow guard
+    }
+
+    if (totalPages > 1) {
+      const pagerY = CONTENT_BOTTOM - 20;
+      if (currentDungeonPage > 0) {
+        const prev = this.add.text(P, pagerY, "[ Prev ]", {
+          fontFamily: FONTS.body,
+          fontSize: "12px",
+          color: COLORS.accent,
+        }).setInteractive({ useHandCursor: true });
+        prev.on("pointerup", () => {
+          currentDungeonPage -= 1;
+          this.refresh();
+        });
+      }
+
+      this.add.text(LAYOUT.width / 2, pagerY, `Page ${currentDungeonPage + 1}/${totalPages}`, {
+        fontFamily: FONTS.body,
+        fontSize: "12px",
+        color: COLORS.textSecondary,
+      }).setOrigin(0.5, 0);
+
+      if (currentDungeonPage < totalPages - 1) {
+        const next = this.add.text(LAYOUT.width - P, pagerY, "[ Next ]", {
+          fontFamily: FONTS.body,
+          fontSize: "12px",
+          color: COLORS.accent,
+        }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+        next.on("pointerup", () => {
+          currentDungeonPage += 1;
+          this.refresh();
+        });
+      }
     }
   }
 }
-
-const CONTENT_BOTTOM = LAYOUT.height - LAYOUT.tabBarHeight - 8;

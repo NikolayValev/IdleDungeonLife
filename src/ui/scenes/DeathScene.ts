@@ -74,7 +74,7 @@ function dungeonNameForDepth(depth: number): string {
   return DUNGEONS.find((dungeon) => dungeon.depthIndex === depth)?.name ?? `Depth ${depth}`;
 }
 
-function takePreview<T>(items: T[], limit = 3): T[] {
+function takePreview<T>(items: T[], limit = 4): T[] {
   return items.slice(0, limit);
 }
 

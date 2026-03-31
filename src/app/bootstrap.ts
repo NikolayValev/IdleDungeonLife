@@ -12,6 +12,7 @@ import { LAYOUT } from "../ui/theme";
 import { createDebugActions, registerDebugKeys } from "./debug";
 import { saveToDisk } from "../core/save";
 import type { SaveFile } from "../core/types";
+import { advanceRun } from "../sim/step";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -153,16 +154,11 @@ function installDevHooks(
     },
     advanceTime: (ms) => {
       const seconds = Math.max(1, Math.round(ms / 1000));
-      const debug = (window as any).__debug;
-      if (debug?.simulateSeconds) {
-        debug.simulateSeconds(seconds);
-      } else {
-        game.dispatch({
-          type: "RECONCILE_OFFLINE",
-          nowUnixSec: nowUnixSec() + seconds,
-        });
-        restartActiveScenes(game);
-      }
+      const start =
+        game.saveFile.currentRun?.lastTickUnixSec ?? game.saveFile.updatedAtUnixSec;
+      const advanced = advanceRun(game.saveFile, start, seconds, 1);
+      setSave(advanced);
+      restartActiveScenes(game);
       return game.saveFile;
     },
   };
@@ -193,6 +189,7 @@ export function bootstrap(): GameController {
   if (IS_DEV) {
     const debugActions = createDebugActions(
       () => game.saveFile,
+      (event) => game.dispatch(event),
       (save) => {
         game.saveFile = save;
         saveToDisk(save);
@@ -208,19 +205,19 @@ export function bootstrap(): GameController {
     // Expose batch sim on window for console access
     (window as any).__batchSim = async (runs = 10) => {
       const { runBatch } = await import("../sim/batch");
-      const result = runBatch({ runs, silent: false });
-      console.table(result.results.map((r) => ({
-        run: r.runIndex,
+      const result = runBatch(1337, runs, { silent: false });
+      console.table(result.runs.map((r, index) => ({
+        run: index,
         score: r.score.total,
-        age: Math.round(r.ageSeconds),
-        depth: r.deepestDungeonIndex,
-        ash: r.legacyAshEarned,
+        age: Math.round(r.survivalTime),
+        depth: r.depth,
+        ash: r.ash,
       })));
       console.log("Averages:", {
-        avgScore: Math.round(result.avgScore),
-        avgAgeSec: Math.round(result.avgAgeSeconds),
-        avgDepth: result.avgDepth.toFixed(1),
-        avgAsh: result.avgLegacyAsh.toFixed(1),
+        avgScore: Math.round(result.averages.score),
+        avgAgeSec: Math.round(result.averages.survivalTime),
+        avgDepth: result.averages.depth.toFixed(1),
+        avgAsh: result.averages.ash.toFixed(1),
       });
     };
   }

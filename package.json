@@ -9,17 +9,20 @@
     "dev:restart": "powershell -ExecutionPolicy Bypass -File scripts/dev-start.ps1 -ForceRestart",
     "dev:status": "powershell -ExecutionPolicy Bypass -File scripts/dev-status.ps1",
     "dev:stop": "powershell -ExecutionPolicy Bypass -File scripts/dev-stop.ps1",
+    "test:unit": "node scripts/run-unit-tests.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build --configLoader native",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/node": "^25.5.0",
     "typescript": "~5.9.3",
     "vite": "^8.0.1"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "phaser": "^3.90.0"
   }
 }

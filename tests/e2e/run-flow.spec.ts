@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { ITEM_REGISTRY } from "../../src/content/items";
 import {
   captureBrowserErrors,
   emitSceneButtonByText,
@@ -96,6 +97,85 @@ test.describe("active run flow", () => {
 
     await page.evaluate(() => {
       (window as any).__test.advanceTime(61_000);
+    });
+
+    state = await getState(page);
+    expect(state.run?.dungeon).toBeNull();
+
+    const newDungeonDrop = await page.evaluate(() => {
+      (window as any).__debug.addGold(200);
+      (window as any).__debug.grantItem("relic_sovereign");
+      (window as any).__debug.grantItem("prelate_raiment");
+      (window as any).__debug.grantItem("hourglass_of_saints");
+      const boostedSave = (window as any).__test.getSave();
+      const boosters = ["relic_sovereign", "prelate_raiment", "hourglass_of_saints"].map(
+        (itemId) =>
+          boostedSave.currentRun.inventory.items.find(
+            (item: { itemId: string }) => item.itemId === itemId
+          )
+      );
+      for (const booster of boosters) {
+        if (!booster) continue;
+        (window as any).__test.dispatch({
+          type: "EQUIP_ITEM",
+          itemInstanceId: booster.instanceId,
+        });
+      }
+      const saveBefore = (window as any).__test.getSave();
+      const beforeIds = new Set(
+        saveBefore.currentRun.inventory.items.map((item: { instanceId: string }) => item.instanceId)
+      );
+      (window as any).__debug.unlockDungeon("sunken_archive");
+      (window as any).__test.dispatch({
+        type: "START_DUNGEON",
+        dungeonId: "sunken_archive",
+        nowUnixSec: Math.floor(Date.now() / 1000),
+      });
+      (window as any).__test.advanceTime(96_000);
+
+      const saveAfter = (window as any).__test.getSave();
+      const dropped = saveAfter.currentRun.inventory.items.filter(
+        (item: { instanceId: string }) => !beforeIds.has(item.instanceId)
+      );
+      const newestItem = dropped[0];
+      if (newestItem) {
+        (window as any).__test.dispatch({
+          type: "EQUIP_ITEM",
+          itemInstanceId: newestItem.instanceId,
+        });
+      }
+
+      return {
+        droppedItemId: newestItem?.itemId ?? null,
+      };
+    });
+
+    expect(newDungeonDrop.droppedItemId).toBeTruthy();
+    const droppedItem = ITEM_REGISTRY.get(newDungeonDrop.droppedItemId!);
+    expect(droppedItem).toBeTruthy();
+
+    state = await getState(page);
+    expect(state.meta.unlockedDungeons).toContain("sunken_archive");
+    expect(state.run?.totalDungeonsCompleted).toBe(3);
+    expect(state.run?.inventory).toContain(newDungeonDrop.droppedItemId!);
+    expect(state.meta.discoveredItems).toContain(newDungeonDrop.droppedItemId!);
+    expect(state.run?.equipment[droppedItem!.slot]).toBeTruthy();
+
+    await page.evaluate(() => {
+      (window as any).__test.startScene("CodexScene");
+    });
+    await page.waitForTimeout(300);
+    await emitSceneButtonByText(page, "CodexScene", "[ Items ]");
+    await page.waitForTimeout(300);
+    let codexTexts = await getSceneTexts(page, "CodexScene");
+    if (!codexTexts.includes(droppedItem!.name)) {
+      await emitSceneButtonByText(page, "CodexScene", "[ Next ]");
+      await page.waitForTimeout(300);
+      codexTexts = await getSceneTexts(page, "CodexScene");
+    }
+    expect(codexTexts).toContain(droppedItem!.name);
+
+    await page.evaluate(() => {
       (window as any).__debug.addEssence(50);
       (window as any).__debug.grantItem("rusted_blade");
 
@@ -145,9 +225,14 @@ test.describe("active run flow", () => {
       (window as any).__test.startScene("TalentsScene");
     });
 
-    const talentTexts = await getSceneTexts(page, "TalentsScene");
+    let talentTexts = await getSceneTexts(page, "TalentsScene");
     expect(talentTexts).toContain("Initiate's Resolve");
     expect(talentTexts).toContain("\u2713");
+
+    await emitSceneButtonByText(page, "TalentsScene", "[ Abyss ]");
+    await page.waitForTimeout(300);
+    talentTexts = await getSceneTexts(page, "TalentsScene");
+    expect(talentTexts).toContain("Hollow Hunger");
 
     expectNoBrowserErrors(errors);
   });

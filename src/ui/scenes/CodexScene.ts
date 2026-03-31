@@ -3,6 +3,7 @@ import { BaseScene } from "./BaseScene";
 import { COLORS, FONTS, LAYOUT } from "../theme";
 import { ITEMS, type ItemDef } from "../../content/items";
 import { TRAITS, type TraitRevealRule } from "../../content/traits";
+import { FUTURE_CODEX_ENTRIES } from "../../content/codex";
 
 type CodexSection = "traits" | "items";
 type DiscoveryFilter = "known" | "unknown" | "all";
@@ -32,6 +33,7 @@ interface TraitEntryView extends CodexEntryBase {
   description: string;
   flavorText: string;
   hint: string;
+  source?: string;
 }
 
 interface ItemEntryView extends CodexEntryBase {
@@ -43,6 +45,7 @@ interface ItemEntryView extends CodexEntryBase {
   flavorText: string;
   modifiers: string[];
   hint: string;
+  source?: string;
 }
 
 function formatTags(tags: string[]): string {
@@ -115,14 +118,45 @@ function buildTraitHint(rule?: TraitRevealRule): string {
   }
 }
 
+function sourceHintForTags(tags: string[]): string {
+  const sourceParts: string[] = [];
+
+  if (tags.includes("holy") || tags.includes("shrine")) {
+    sourceParts.push("holy or shrine delves");
+  }
+  if (tags.includes("unholy") || tags.includes("abyss") || tags.includes("decay")) {
+    sourceParts.push("unholy, decay, or abyss delves");
+  }
+  if (tags.includes("knowledge") || tags.includes("relic")) {
+    sourceParts.push("archive or relic delves");
+  }
+  if (tags.includes("wealth")) {
+    sourceParts.push("wealth-marked vaults");
+  }
+  if (tags.includes("fate")) {
+    sourceParts.push("strong alignment swings");
+  }
+  if (tags.includes("vitality")) {
+    sourceParts.push("late-life or vitality-heavy runs");
+  }
+  if (tags.includes("boss")) {
+    sourceParts.push("boss remains");
+  }
+
+  return sourceParts.length > 0
+    ? `Source: ${sourceParts.join(", ")}.`
+    : "Source: common delves and long survival.";
+}
+
 function buildItemHint(item: ItemDef): string {
+  const source = sourceHintForTags(item.tags);
   if (item.rarity === "legendary") {
-    return "Legendary relics favor abyssal or boss-grade delves.";
+    return `${source} Legendary items favor difficult delves and matching alignment.`;
   }
   if (item.rarity === "rare") {
-    return "Rare gear becomes more common beyond the chapel.";
+    return `${source} Rare gear becomes more common once you move past the chapel.`;
   }
-  return "Common gear can surface in even the shallowest delves.";
+  return `${source} Common gear can surface in even the shallowest delves.`;
 }
 
 function traitCardColor(entry: TraitEntryView): number {
@@ -136,6 +170,12 @@ function itemCardColor(entry: ItemEntryView): number {
 function compareEntries(left: CodexEntryBase & { name: string }, right: CodexEntryBase & { name: string }): number {
   if (left.known !== right.known) {
     return left.known ? -1 : 1;
+  }
+
+  const leftFuture = left.id.startsWith("future_");
+  const rightFuture = right.id.startsWith("future_");
+  if (leftFuture !== rightFuture) {
+    return leftFuture ? 1 : -1;
   }
 
   const byName = left.name.localeCompare(right.name);
@@ -205,10 +245,26 @@ export class CodexScene extends BaseScene {
             : "Something about this trait is already leaking through.",
           flavorText: known ? trait.flavorText : buildTraitHint(trait.revealRules?.[0]),
           hint: buildTraitHint(trait.revealRules?.[0]),
+          source: sourceHintForTags(trait.tags),
         };
       })
       .filter((entry) => matchesDiscoveryFilter(entry.known))
       .filter(matchesTraitFacet)
+      .concat(
+        discoveryFilter === "known"
+          ? []
+          : FUTURE_CODEX_ENTRIES.filter((entry) => entry.section === "trait").map((entry) => ({
+              type: "trait" as const,
+              id: entry.id,
+              known: false,
+              name: entry.name,
+              tags: entry.tags,
+              description: `Placeholder archive. ${entry.source}.`,
+              flavorText: entry.hint,
+              hint: entry.hint,
+              source: `Source: ${entry.source}.`,
+            }))
+      )
       .sort(compareEntries);
 
     const itemEntries = ITEMS
@@ -227,10 +283,28 @@ export class CodexScene extends BaseScene {
             ? item.baseModifiers.map(formatModifier)
             : ["Properties remain unidentified."],
           hint: buildItemHint(item),
+          source: sourceHintForTags(item.tags),
         };
       })
       .filter((entry) => matchesDiscoveryFilter(entry.known))
       .filter(matchesItemFacet)
+      .concat(
+        discoveryFilter === "known"
+          ? []
+          : FUTURE_CODEX_ENTRIES.filter((entry) => entry.section === "item").map((entry) => ({
+              type: "item" as const,
+              id: entry.id,
+              known: false,
+              name: entry.name,
+              rarity: "legendary" as const,
+              slot: "artifact" as const,
+              tags: entry.tags,
+              flavorText: entry.hint,
+              modifiers: ["Future archive pattern."],
+              hint: `${entry.hint} Source: ${entry.source}.`,
+              source: `Source: ${entry.source}.`,
+            }))
+      )
       .sort(compareEntries);
 
     this.drawHeader(knownTraitIds.size, knownItemIds.size);
@@ -278,6 +352,11 @@ export class CodexScene extends BaseScene {
       fontFamily: FONTS.body,
       fontSize: "12px",
       color: COLORS.textSecondary,
+    });
+    this.add.text(P + 312, CONTENT_TOP + 26, `Signals: ${FUTURE_CODEX_ENTRIES.length}`, {
+      fontFamily: FONTS.body,
+      fontSize: "12px",
+      color: COLORS.textMuted,
     });
   }
 
@@ -400,6 +479,14 @@ export class CodexScene extends BaseScene {
         fontStyle: "italic",
         wordWrap: { width: LAYOUT.cardWidth - 16 },
       });
+      if (!entry.known && entry.source) {
+        this.add.text(P + 8, y + 132, entry.source, {
+          fontFamily: FONTS.body,
+          fontSize: "10px",
+          color: COLORS.textSecondary,
+          wordWrap: { width: LAYOUT.cardWidth - 16 },
+        });
+      }
       y += 168;
     }
   }
@@ -437,6 +524,14 @@ export class CodexScene extends BaseScene {
         color: COLORS.textPrimary,
         wordWrap: { width: LAYOUT.cardWidth - 16 },
       });
+      if (!entry.known && entry.source) {
+        this.add.text(P + 8, y + 126, entry.source, {
+          fontFamily: FONTS.body,
+          fontSize: "10px",
+          color: COLORS.textSecondary,
+          wordWrap: { width: LAYOUT.cardWidth - 16 },
+        });
+      }
       y += 168;
     }
   }

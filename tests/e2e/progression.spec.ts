@@ -27,7 +27,7 @@ test.describe("meta progression flow", () => {
       (window as any).__debug.addGold(100);
     });
 
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       await page.evaluate(() => {
         (window as any).__test.dispatch({
           type: "START_DUNGEON",
@@ -41,7 +41,7 @@ test.describe("meta progression flow", () => {
     }
 
     let state = await getState(page);
-    expect(state.run?.totalDungeonsCompleted).toBe(3);
+    expect(state.run?.totalDungeonsCompleted).toBe(5);
 
     await page.evaluate(() => {
       (window as any).__test.dispatch({ type: "ASSIGN_JOB", jobId: "porter" });
@@ -55,15 +55,16 @@ test.describe("meta progression flow", () => {
     expect(state.run?.jobId).toBeNull();
 
     const deathTexts = await getSceneTexts(page, "DeathScene");
-    expect(deathTexts).toContain("Legacy Ash earned: +9");
+    expect(deathTexts).toContain("Legacy Ash earned: +15");
     expect(deathTexts).toContain("Depth bonus: +0");
-    expect(deathTexts).toContain("Age bonus: +3");
+    expect(deathTexts).toContain("Age bonus: +5");
     expect(deathTexts).toContain("Boss bonus: +0");
-    expect(deathTexts).toContain("Dungeon clears: +6");
-    expect(deathTexts).toContain("Total Legacy Ash after claim: 9");
+    expect(deathTexts).toContain("Dungeon clears: +10");
+    expect(deathTexts).toContain("Total Legacy Ash after claim: 15");
     expect(deathTexts).toContain("Affordable After Claim");
     expect(deathTexts).toContain("Job: Scavenger (3 Ash)");
-    expect(deathTexts).toContain("Dungeon: Grave Hollow (5 Ash)");
+    expect(deathTexts).toContain("Dungeon: Grave Hollow (4 Ash)");
+    expect(deathTexts).toContain("Dungeon: Sunken Archive (6 Ash)");
 
     await emitSceneButtonByText(page, "DeathScene", "[ Begin New Run ]");
     await page.waitForTimeout(500);
@@ -74,7 +75,7 @@ test.describe("meta progression flow", () => {
     expect(state.run?.alive).toBe(true);
     expect(state.run?.jobId).toBeNull();
     expect(state.meta.totalRuns).toBe(2);
-    expect(state.meta.legacyAsh).toBeGreaterThanOrEqual(8);
+    expect(state.meta.legacyAsh).toBeGreaterThanOrEqual(15);
     expect(state.meta.codexEntries.length).toBeGreaterThan(0);
     expect(state.meta.discoveredTraits).toEqual(
       expect.arrayContaining(discoveredThisRun)
@@ -102,7 +103,7 @@ test.describe("meta progression flow", () => {
 
     state = await getState(page);
     expect(state.meta.unlockedJobs).toContain("scavenger");
-    expect(state.meta.legacyAsh).toBeGreaterThanOrEqual(5);
+    expect(state.meta.legacyAsh).toBeGreaterThanOrEqual(2);
     expect(await getSceneTexts(page, "JobsScene")).toContain("Scavenger");
     expect(await getSceneTexts(page, "JobsScene")).toContain("[ Assign ]");
 
@@ -113,11 +114,15 @@ test.describe("meta progression flow", () => {
 
     await emitSceneButtonByText(page, "DungeonsScene", "[ Unlock ]", 0);
     await page.waitForTimeout(300);
+    await emitSceneButtonByText(page, "DungeonsScene", "[ Unlock ]", 0);
+    await page.waitForTimeout(300);
 
     state = await getState(page);
     expect(state.meta.unlockedDungeons).toContain("grave_hollow");
-    expect(state.meta.legacyAsh).toBeGreaterThanOrEqual(0);
+    expect(state.meta.unlockedDungeons).toContain("sunken_archive");
+    expect(state.meta.legacyAsh).toBeGreaterThanOrEqual(2);
     expect(await getSceneTexts(page, "DungeonsScene")).toContain("Grave Hollow");
+    expect(await getSceneTexts(page, "DungeonsScene")).toContain("Sunken Archive");
 
     expectNoBrowserErrors(errors);
   });

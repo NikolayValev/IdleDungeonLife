@@ -1,13 +1,8 @@
 import type { SaveFile } from "../core/types";
-import { reduceGame } from "../core/reducer";
-import { ITEM_REGISTRY } from "../content/items";
+import type { GameEvent } from "../core/events";
 import { JOB_REGISTRY } from "../content/jobs";
 import { clearSave, freshSave } from "../core/save";
 
-/**
- * Debug action dispatcher. All actions are safe for development only.
- * In production builds, these are no-ops.
- */
 export interface DebugActions {
   addGold(amount: number): void;
   addEssence(amount: number): void;
@@ -20,135 +15,61 @@ export interface DebugActions {
 }
 
 export function createDebugActions(
-  getSave: () => SaveFile,
-  setSave: (save: SaveFile) => void,
+  _getSave: () => SaveFile,
+  dispatch: (event: GameEvent) => void,
+  replaceSave: (save: SaveFile) => void,
   onRefresh: () => void
 ): DebugActions {
   const now = () => Math.floor(Date.now() / 1000);
 
+  const dispatchAndRefresh = (event: GameEvent): void => {
+    dispatch(event);
+    onRefresh();
+  };
+
   return {
     addGold(amount) {
-      const save = getSave();
-      if (!save.currentRun) return;
-      setSave({
-        ...save,
-        currentRun: {
-          ...save.currentRun,
-          resources: {
-            ...save.currentRun.resources,
-            gold: save.currentRun.resources.gold + amount,
-          },
-        },
-      });
-      onRefresh();
+      dispatchAndRefresh({ type: "DEBUG_ADD_RESOURCES", gold: amount });
     },
 
     addEssence(amount) {
-      const save = getSave();
-      if (!save.currentRun) return;
-      setSave({
-        ...save,
-        currentRun: {
-          ...save.currentRun,
-          resources: {
-            ...save.currentRun.resources,
-            essence: save.currentRun.resources.essence + amount,
-          },
-        },
-      });
-      onRefresh();
+      dispatchAndRefresh({ type: "DEBUG_ADD_RESOURCES", essence: amount });
     },
 
     grantItem(itemId) {
-      const save = getSave();
-      if (!save.currentRun) return;
-      const def = ITEM_REGISTRY.get(itemId);
-      if (!def) {
-        console.warn(`[debug] Unknown itemId: ${itemId}`);
-        return;
-      }
-      const inst = { instanceId: `debug_${itemId}_${Date.now()}`, itemId };
-      setSave({
-        ...save,
-        currentRun: {
-          ...save.currentRun,
-          inventory: {
-            items: [...save.currentRun.inventory.items, inst],
-          },
-        },
-      });
-      onRefresh();
+      dispatchAndRefresh({ type: "DEBUG_GRANT_ITEM", itemId });
     },
 
     unlockDungeon(dungeonId) {
-      const save = getSave();
-      if (save.meta.unlockedDungeonIds.includes(dungeonId)) return;
-      setSave({
-        ...save,
-        meta: {
-          ...save.meta,
-          unlockedDungeonIds: [...save.meta.unlockedDungeonIds, dungeonId],
-        },
-      });
-      onRefresh();
+      dispatchAndRefresh({ type: "DEBUG_UNLOCK_DUNGEON", dungeonId });
     },
 
     unlockAllJobs() {
-      const save = getSave();
-      const allJobIds = [...JOB_REGISTRY.keys()];
-      setSave({
-        ...save,
-        meta: {
-          ...save.meta,
-          unlockedJobIds: [...new Set([...save.meta.unlockedJobIds, ...allJobIds])],
-        },
-      });
+      for (const jobId of JOB_REGISTRY.keys()) {
+        dispatch({ type: "DEBUG_UNLOCK_JOB", jobId });
+      }
       onRefresh();
     },
 
     killRun() {
-      const save = getSave();
-      if (!save.currentRun) return;
-      setSave({
-        ...save,
-        currentRun: {
-          ...save.currentRun,
-          alive: false,
-          currentJobId: null,
-          lifespan: { ...save.currentRun.lifespan, vitality: 0 },
-        },
-      });
-      onRefresh();
+      dispatchAndRefresh({ type: "DEBUG_KILL_RUN" });
     },
 
     simulateSeconds(seconds) {
-      let save = getSave();
-      const futureNow = now() + seconds;
-      save = reduceGame(save, { type: "RECONCILE_OFFLINE", nowUnixSec: futureNow });
-      // Update the persisted timestamp so future ticks are correct
-      save = { ...save, updatedAtUnixSec: now() };
-      if (save.currentRun) {
-        save = {
-          ...save,
-          currentRun: { ...save.currentRun, lastTickUnixSec: now() },
-        };
-      }
-      setSave(save);
-      onRefresh();
+      dispatchAndRefresh({
+        type: "RECONCILE_OFFLINE",
+        nowUnixSec: now() + seconds,
+      });
     },
 
     resetSave() {
       clearSave();
-      setSave(freshSave(now()));
+      replaceSave(freshSave(now()));
       onRefresh();
     },
   };
 }
 
-/**
- * Register debug keyboard shortcuts for web development.
- * Only called in dev builds.
- */
 export function registerDebugKeys(actions: DebugActions): void {
   if (typeof window === "undefined") return;
 

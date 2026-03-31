@@ -1,96 +1,121 @@
-import { ITEMS } from "./items"
+import { BALANCE } from "./balance";
+import { ITEMS } from "./items";
+import type { Tag } from "../core/types";
 
 export interface LootTableEntry {
   itemId: string;
   weight: number;
-  minRarity?: "common" | "rare" | "legendary";
 }
 
 export interface LootTable {
   id: string;
   entries: LootTableEntry[];
-  /** Base number of items to roll */
   baseDropCount: number;
-  /** Gold reward range */
   goldMin: number;
   goldMax: number;
-  /** Essence reward range */
   essenceMin: number;
   essenceMax: number;
+  rarityWeights: {
+    common: number;
+    rare: number;
+    legendary: number;
+  };
 }
 
-function itemsByRarity(rarity: "common" | "rare" | "legendary", weight: number): LootTableEntry[] {
-  return ITEMS.filter((i) => i.rarity === rarity).map((i) => ({ itemId: i.id, weight }));
+type LootFocus = {
+  tags: Tag[];
+  featuredIds?: string[];
+  secondaryTags?: Tag[];
+};
+
+function weightForTags(itemTags: Tag[], focus: LootFocus): number {
+  let weight = 1;
+
+  for (const tag of focus.tags) {
+    if (itemTags.includes(tag)) {
+      weight += 1.4;
+    }
+  }
+
+  for (const tag of focus.secondaryTags ?? []) {
+    if (itemTags.includes(tag)) {
+      weight += 0.6;
+    }
+  }
+
+  return weight;
 }
+
+function buildEntries(focus: LootFocus): LootTableEntry[] {
+  return ITEMS.map((item) => {
+    const featuredBonus = focus.featuredIds?.includes(item.id) ? 2.5 : 1;
+    const weight = Number((weightForTags(item.tags, focus) * featuredBonus).toFixed(2));
+    return { itemId: item.id, weight };
+  });
+}
+
+const table = (
+  id: keyof typeof BALANCE.loot.tables,
+  focus: LootFocus
+): LootTable => ({
+  id,
+  entries: buildEntries(focus),
+  ...BALANCE.loot.tables[id],
+});
 
 export const LOOT_TABLES: LootTable[] = [
-  {
-    id: "loot_chapel",
-    entries: [
-      ...itemsByRarity("common", 60),
-      ...itemsByRarity("rare", 15),
-      ...itemsByRarity("legendary", 2),
-    ],
-    baseDropCount: 1,
-    goldMin: 8,
-    goldMax: 18,
-    essenceMin: 0,
-    essenceMax: 3,
-  },
-  {
-    id: "loot_grave",
-    entries: [
-      ...itemsByRarity("common", 50),
-      ...itemsByRarity("rare", 22),
-      ...itemsByRarity("legendary", 4),
-    ],
-    baseDropCount: 1,
-    goldMin: 15,
-    goldMax: 30,
-    essenceMin: 1,
-    essenceMax: 5,
-  },
-  {
-    id: "loot_vault",
-    entries: [
-      ...itemsByRarity("common", 40),
-      ...itemsByRarity("rare", 35),
-      ...itemsByRarity("legendary", 8),
-    ],
-    baseDropCount: 1,
-    goldMin: 30,
-    goldMax: 55,
-    essenceMin: 3,
-    essenceMax: 10,
-  },
-  {
-    id: "loot_abyss",
-    entries: [
-      ...itemsByRarity("common", 30),
-      ...itemsByRarity("rare", 40),
-      ...itemsByRarity("legendary", 12),
-    ],
-    baseDropCount: 2,
-    goldMin: 55,
-    goldMax: 100,
-    essenceMin: 5,
-    essenceMax: 18,
-  },
-  {
-    id: "loot_boss",
-    entries: [
-      ...itemsByRarity("common", 10),
-      ...itemsByRarity("rare", 30),
-      ...itemsByRarity("legendary", 25),
-    ],
-    baseDropCount: 2,
-    goldMin: 120,
-    goldMax: 200,
-    essenceMin: 15,
-    essenceMax: 35,
-  },
+  table("loot_chapel", {
+    tags: ["holy", "shrine"],
+    secondaryTags: ["vitality", "fate"],
+    featuredIds: ["chapel_mace", "pilgrim_vestments", "chapel_token", "sanctum_mail", "censer_of_tithes"],
+  }),
+  table("loot_grave", {
+    tags: ["unholy", "decay"],
+    secondaryTags: ["vitality"],
+    featuredIds: ["grave_dagger", "grave_shroud", "hollow_bone", "embalmer_habit", "black_lantern"],
+  }),
+  table("loot_archive", {
+    tags: ["knowledge", "relic"],
+    secondaryTags: ["fate"],
+    featuredIds: ["archivist_wrap", "scribe_charm", "sunken_quill_knife", "scribe_lens", "oracle_veil"],
+  }),
+  table("loot_gilded", {
+    tags: ["wealth", "relic"],
+    secondaryTags: ["fate"],
+    featuredIds: ["copper_tallyblade", "scavenger_coat", "pauper_beads", "gilded_hook", "broker_harness"],
+  }),
+  table("loot_ossuary", {
+    tags: ["vitality", "decay"],
+    secondaryTags: ["knowledge"],
+    featuredIds: ["ossuary_hatchet", "briar_mail", "iron_talisman", "marrow_pike", "marrow_clock"],
+  }),
+  table("loot_vault", {
+    tags: ["relic", "knowledge", "fate"],
+    secondaryTags: ["holy"],
+    featuredIds: ["vault_plate", "scribe_lens", "fate_coin", "relic_sovereign", "hourglass_of_saints"],
+  }),
+  table("loot_molting", {
+    tags: ["abyss", "decay", "vitality"],
+    secondaryTags: ["unholy"],
+    featuredIds: ["abyss_brand", "thornbound_cuirass", "black_lantern", "borrowed_skin", "root_of_the_last_spring"],
+  }),
+  table("loot_abyss", {
+    tags: ["abyss", "unholy", "fate"],
+    secondaryTags: ["boss"],
+    featuredIds: ["abyss_brand", "abyss_carapace", "black_lantern", "the_last_seal", "maw_of_tithes"],
+  }),
+  table("loot_prelate", {
+    tags: ["boss", "holy", "fate"],
+    secondaryTags: ["shrine", "relic"],
+    featuredIds: ["shard_of_prelate", "sanctum_mail", "censer_of_tithes", "prelate_raiment", "eclipse_gavel"],
+  }),
+  table("loot_eclipsed", {
+    tags: ["boss", "abyss", "holy", "unholy"],
+    secondaryTags: ["fate", "decay"],
+    featuredIds: ["the_last_seal", "borrowed_skin", "crown_of_the_hollow_market", "eclipse_gavel", "gilded_molt"],
+  }),
 ];
 
 export const LOOT_TABLE_REGISTRY = new Map<string, LootTable>(
-  LOOT_TABLES.map((l) => [l.id, l])
+  LOOT_TABLES.map((lootTable) => [lootTable.id, lootTable])
 );

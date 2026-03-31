@@ -4,6 +4,16 @@ import { TALENTS, TALENT_REGISTRY } from "../../content/talents";
 import { computeStats } from "../../core/modifiers";
 
 const P = LAYOUT.padding;
+const TALENTS_PER_PAGE = 5;
+let currentTalentPage = 0;
+type TalentBranchFilter = "all" | "core" | "holy" | "abyss";
+let talentBranchFilter: TalentBranchFilter = "all";
+
+function matchesBranch(nodeId: string): TalentBranchFilter {
+  if (nodeId.startsWith("holy")) return "holy";
+  if (nodeId.startsWith("abyss")) return "abyss";
+  return "core";
+}
 
 export class TalentsScene extends BaseScene {
   constructor() {
@@ -39,7 +49,41 @@ export class TalentsScene extends BaseScene {
     });
     y += 22;
 
-    for (const node of TALENTS) {
+    const filters: Array<{ id: TalentBranchFilter; label: string }> = [
+      { id: "all", label: "[ All ]" },
+      { id: "core", label: "[ Core ]" },
+      { id: "holy", label: "[ Holy ]" },
+      { id: "abyss", label: "[ Abyss ]" },
+    ];
+
+    filters.forEach((filter, index) => {
+      const button = this.add.text(P + index * 84, y, filter.label, {
+        fontFamily: FONTS.body,
+        fontSize: "12px",
+        color: talentBranchFilter === filter.id ? COLORS.accent : COLORS.textSecondary,
+      }).setInteractive({ useHandCursor: true });
+
+      button.on("pointerup", () => {
+        if (talentBranchFilter === filter.id) return;
+        talentBranchFilter = filter.id;
+        currentTalentPage = 0;
+        this.refresh();
+      });
+    });
+    y += 22;
+
+    const filteredTalents = TALENTS.filter((node) =>
+      talentBranchFilter === "all" ? true : matchesBranch(node.id) === talentBranchFilter
+    );
+
+    const totalPages = Math.max(1, Math.ceil(filteredTalents.length / TALENTS_PER_PAGE));
+    currentTalentPage = Math.min(currentTalentPage, totalPages - 1);
+    const visibleTalents = filteredTalents.slice(
+      currentTalentPage * TALENTS_PER_PAGE,
+      (currentTalentPage + 1) * TALENTS_PER_PAGE
+    );
+
+    for (const node of visibleTalents) {
       const isUnlocked = run.talents.unlockedNodeIds.includes(node.id);
       const prereqsMet = node.prerequisites.every((p) =>
         run.talents.unlockedNodeIds.includes(p)
@@ -131,7 +175,39 @@ export class TalentsScene extends BaseScene {
       }
 
       y += 74;
-      if (y > LAYOUT.height - LAYOUT.tabBarHeight - 74) break;
+    }
+
+    if (totalPages > 1) {
+      const pagerY = LAYOUT.height - LAYOUT.tabBarHeight - 20;
+      if (currentTalentPage > 0) {
+        const prev = this.add.text(P, pagerY, "[ Prev ]", {
+          fontFamily: FONTS.body,
+          fontSize: "12px",
+          color: COLORS.accent,
+        }).setInteractive({ useHandCursor: true });
+        prev.on("pointerup", () => {
+          currentTalentPage -= 1;
+          this.refresh();
+        });
+      }
+
+      this.add.text(LAYOUT.width / 2, pagerY, `Page ${currentTalentPage + 1}/${totalPages}`, {
+        fontFamily: FONTS.body,
+        fontSize: "12px",
+        color: COLORS.textSecondary,
+      }).setOrigin(0.5, 0);
+
+      if (currentTalentPage < totalPages - 1) {
+        const next = this.add.text(LAYOUT.width - P, pagerY, "[ Next ]", {
+          fontFamily: FONTS.body,
+          fontSize: "12px",
+          color: COLORS.accent,
+        }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+        next.on("pointerup", () => {
+          currentTalentPage += 1;
+          this.refresh();
+        });
+      }
     }
   }
 }

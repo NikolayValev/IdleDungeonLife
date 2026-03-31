@@ -1,3 +1,4 @@
+import { BALANCE } from "./balance";
 import type { Modifier, Tag, UnlockRequirement } from "../core/types";
 
 export interface JobDef {
@@ -15,19 +16,19 @@ export const JOBS: JobDef[] = [
   {
     id: "porter",
     name: "Porter",
-    description: "Haul crates, carry loads. Steady gold, no surprises.",
+    description: "Haul crates and bodies alike. Reliable gold, no revelations.",
     tags: ["neutral", "wealth"],
-    baseGoldPerSec: 0.5,
-    baseEssencePerSec: 0,
+    baseGoldPerSec: BALANCE.jobRates.porter.goldPerSec,
+    baseEssencePerSec: BALANCE.jobRates.porter.essencePerSec,
   },
   {
     id: "scavenger",
     name: "Scavenger",
-    description: "Root through ruins and refuse. Better pay, better finds.",
-    tags: ["neutral", "relic"],
-    unlockRequirement: { legacyAsh: 3 },
-    baseGoldPerSec: 0.9,
-    baseEssencePerSec: 0,
+    description: "Strip ruins for saleable parts. Better pay, sharper loot instincts.",
+    tags: ["wealth", "relic"],
+    unlockRequirement: { legacyAsh: BALANCE.unlockCost.scavenger },
+    baseGoldPerSec: BALANCE.jobRates.scavenger.goldPerSec,
+    baseEssencePerSec: BALANCE.jobRates.scavenger.essencePerSec,
     modifiers: [
       { stat: "itemFindRate", op: "mul", value: 1.15, source: "job_scavenger" },
     ],
@@ -35,14 +36,17 @@ export const JOBS: JobDef[] = [
   {
     id: "scribe",
     name: "Scribe",
-    description: "Copy forbidden texts. Low gold, steady essence. Knowledge accumulates.",
+    description: "Copy forbidden texts. Modest coin, steady essence, sharper discovery.",
     tags: ["knowledge", "neutral"],
-    unlockRequirement: { legacyAsh: 8 },
-    baseGoldPerSec: 0.25,
-    baseEssencePerSec: 0.08,
+    unlockRequirement: { legacyAsh: BALANCE.unlockCost.scribe },
+    baseGoldPerSec: BALANCE.jobRates.scribe.goldPerSec,
+    baseEssencePerSec: BALANCE.jobRates.scribe.essencePerSec,
+    modifiers: [
+      { stat: "discoveryRate", op: "mul", value: 1.12, source: "job_scribe" },
+    ],
   },
 ];
 
 export const JOB_REGISTRY = new Map<string, JobDef>(
-  JOBS.map((j) => [j.id, j])
+  JOBS.map((job) => [job.id, job])
 );

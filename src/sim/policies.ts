@@ -1,156 +1,181 @@
-import type { SaveFile } from "../core/types";
+import type { SaveFile, RunState, ComputedStats } from "../core/types";
+import type { GameEvent } from "../core/events";
 import { computeStats } from "../core/modifiers";
+import { computeDungeonScore, resolveDungeonOutcome } from "../core/stats";
 import { DUNGEONS } from "../content/dungeons";
 import { TALENTS } from "../content/talents";
 import { ITEM_REGISTRY } from "../content/items";
 import { JOB_REGISTRY } from "../content/jobs";
 
-/**
- * Policy interface: given a save state, decide what event to fire next.
- * Returns null if no action should be taken this step.
- */
 export type PolicyAction =
-  | { type: "ASSIGN_JOB"; jobId: string }
-  | { type: "START_DUNGEON"; dungeonId: string; nowUnixSec: number }
-  | { type: "EQUIP_ITEM"; itemInstanceId: string }
-  | { type: "UNLOCK_TALENT"; nodeId: string }
+  | Extract<GameEvent, { type: "ASSIGN_JOB" | "START_DUNGEON" | "EQUIP_ITEM" | "UNLOCK_TALENT" }>
   | null;
 
 export interface Policy {
   decide(save: SaveFile, nowUnixSec: number): PolicyAction;
 }
 
-/**
- * Baseline greedy policy:
- * 1. Pick best unlocked job
- * 2. Equip best available item per slot
- * 3. Unlock affordable talent with best power contribution
- * 4. Enter best affordable dungeon not currently in progress
- */
+function scoreStats(stats: ComputedStats): number {
+  return (
+    stats.power * 4 +
+    stats.survivability * 3 +
+    stats.dungeonSuccessRate * 30 +
+    stats.goldRate * 8 +
+    stats.essenceRate * 20 +
+    stats.itemFindRate * 14 +
+    stats.legendaryDropRate * 220 +
+    stats.jobOutputMultiplier * 10 +
+    stats.discoveryRate * 12 -
+    stats.vitalityDecayRate * 12 -
+    stats.dungeonWearMultiplier * 10 -
+    stats.bossWearMultiplier * 6
+  );
+}
+
+function withEquippedItem(run: RunState, itemInstanceId: string): RunState | null {
+  const instance = run.inventory.items.find((item) => item.instanceId === itemInstanceId);
+  if (!instance) return null;
+  const itemDef = ITEM_REGISTRY.get(instance.itemId);
+  if (!itemDef) return null;
+
+  return {
+    ...run,
+    equipment: {
+      ...run.equipment,
+      [itemDef.slot]: itemInstanceId,
+    },
+  };
+}
+
+function bestItemAction(save: SaveFile): PolicyAction {
+  const run = save.currentRun;
+  if (!run?.alive) return null;
+
+  const baseScore = scoreStats(computeStats(run));
+  let best: { itemInstanceId: string; delta: number } | null = null;
+
+  for (const instance of run.inventory.items) {
+    const candidateRun = withEquippedItem(run, instance.instanceId);
+    if (!candidateRun) continue;
+    const candidateScore = scoreStats(computeStats(candidateRun));
+    const delta = candidateScore - baseScore;
+
+    if (delta <= 0) continue;
+    if (!best || delta > best.delta) {
+      best = { itemInstanceId: instance.instanceId, delta };
+    }
+  }
+
+  return best ? { type: "EQUIP_ITEM", itemInstanceId: best.itemInstanceId } : null;
+}
+
+function bestTalentAction(save: SaveFile): PolicyAction {
+  const run = save.currentRun;
+  if (!run?.alive) return null;
+
+  const baseScore = scoreStats(computeStats(run));
+  let best:
+    | {
+        nodeId: string;
+        cost: number;
+        delta: number;
+      }
+    | null = null;
+
+  for (const talent of TALENTS) {
+    if (run.talents.unlockedNodeIds.includes(talent.id)) continue;
+    if (!talent.prerequisites.every((id) => run.talents.unlockedNodeIds.includes(id))) {
+      continue;
+    }
+
+    const effectiveCost = talent.costEssence * computeStats(run).talentCostMultiplier;
+    if (run.resources.essence < effectiveCost) continue;
+
+    const candidateRun: RunState = {
+      ...run,
+      talents: {
+        unlockedNodeIds: [...run.talents.unlockedNodeIds, talent.id],
+      },
+    };
+
+    const delta = scoreStats(computeStats(candidateRun)) - baseScore;
+    if (delta <= 0) continue;
+
+    if (
+      !best ||
+      effectiveCost < best.cost ||
+      (effectiveCost === best.cost && delta > best.delta)
+    ) {
+      best = {
+        nodeId: talent.id,
+        cost: effectiveCost,
+        delta,
+      };
+    }
+  }
+
+  return best ? { type: "UNLOCK_TALENT", nodeId: best.nodeId } : null;
+}
+
+function bestJobAction(save: SaveFile): PolicyAction {
+  const run = save.currentRun;
+  if (!run?.alive) return null;
+
+  const bestJob = save.meta.unlockedJobIds.reduce(
+    (best, jobId) => {
+      const job = JOB_REGISTRY.get(jobId);
+      if (!job) return best;
+      const incomeScore = job.baseGoldPerSec * 10 + (job.baseEssencePerSec ?? 0) * 40;
+      if (!best || incomeScore > best.incomeScore) {
+        return { jobId, incomeScore };
+      }
+      return best;
+    },
+    null as { jobId: string; incomeScore: number } | null
+  );
+
+  if (!bestJob || run.currentJobId === bestJob.jobId) return null;
+  return { type: "ASSIGN_JOB", jobId: bestJob.jobId };
+}
+
+function bestDungeonAction(save: SaveFile, nowUnixSec: number): PolicyAction {
+  const run = save.currentRun;
+  if (!run?.alive || run.currentDungeon) return null;
+
+  const candidates = DUNGEONS.filter(
+    (dungeon) =>
+      save.meta.unlockedDungeonIds.includes(dungeon.id) &&
+      run.resources.gold >= dungeon.goldCost
+  ).map((dungeon) => {
+    const score = computeDungeonScore(run, dungeon.tags);
+    const outcome = resolveDungeonOutcome(score, dungeon.difficulty);
+    const margin = score - dungeon.difficulty;
+    const outcomeWeight =
+      outcome === "success" ? 40 : outcome === "partial" ? 12 : -20;
+    const value =
+      dungeon.depthIndex * 100 +
+      margin * 3 +
+      outcomeWeight -
+      dungeon.goldCost * 0.15 -
+      dungeon.vitalityWear * 1.5;
+    return { dungeonId: dungeon.id, value };
+  });
+
+  if (candidates.length === 0) return null;
+  candidates.sort((left, right) => right.value - left.value);
+  return { type: "START_DUNGEON", dungeonId: candidates[0].dungeonId, nowUnixSec };
+}
+
 export class BaselinePolicy implements Policy {
   decide(save: SaveFile, nowUnixSec: number): PolicyAction {
     const run = save.currentRun;
     if (!run?.alive) return null;
-    if (run.currentDungeon) return null; // busy
 
-    const stats = computeStats(run);
-
-    // 1. Assign best job
-    const bestJob = save.meta.unlockedJobIds.reduce(
-      (best, jid) => {
-        const j = JOB_REGISTRY.get(jid);
-        if (!j) return best;
-        const income = j.baseGoldPerSec + (j.baseEssencePerSec ?? 0) * 5;
-        if (!best || income > best.income) return { id: jid, income };
-        return best;
-      },
-      null as { id: string; income: number } | null
+    return (
+      bestJobAction(save) ??
+      bestItemAction(save) ??
+      bestTalentAction(save) ??
+      bestDungeonAction(save, nowUnixSec)
     );
-
-    if (bestJob && run.currentJobId !== bestJob.id) {
-      return { type: "ASSIGN_JOB", jobId: bestJob.id };
-    }
-
-    // 2. Equip best items
-    const slots: Array<"weapon" | "armor" | "artifact"> = ["weapon", "armor", "artifact"];
-    for (const slot of slots) {
-      const unequipped = run.inventory.items.filter((inst) => {
-        const currentEquipped = [
-          run.equipment.weapon,
-          run.equipment.armor,
-          run.equipment.artifact,
-        ];
-        if (currentEquipped.includes(inst.instanceId)) return false;
-        const def = ITEM_REGISTRY.get(inst.itemId);
-        return def?.slot === slot;
-      });
-
-      if (unequipped.length > 0) {
-        // Score each item by power + survivability modifier sum
-        const scored = unequipped.map((inst) => {
-          const def = ITEM_REGISTRY.get(inst.itemId);
-          const score = def?.baseModifiers.reduce((s, m) => {
-            if (m.stat === "power" || m.stat === "survivability") return s + m.value;
-            return s;
-          }, 0) ?? 0;
-          return { inst, score };
-        });
-        scored.sort((a, b) => b.score - a.score);
-
-        const currentSlotId = run.equipment[slot];
-        if (!currentSlotId || scored[0].score > 0) {
-          const currentScore = currentSlotId
-            ? (() => {
-                const ci = run.inventory.items.find(
-                  (i) => i.instanceId === currentSlotId
-                );
-                const def = ci && ITEM_REGISTRY.get(ci.itemId);
-                return (
-                  def?.baseModifiers.reduce((s, m) => {
-                    if (m.stat === "power" || m.stat === "survivability")
-                      return s + m.value;
-                    return s;
-                  }, 0) ?? 0
-                );
-              })()
-            : -Infinity;
-
-          if (scored[0].score > currentScore) {
-            return {
-              type: "EQUIP_ITEM",
-              itemInstanceId: scored[0].inst.instanceId,
-            };
-          }
-        }
-      }
-    }
-
-    // 3. Unlock affordable talent
-    const affordable = TALENTS.filter((t) => {
-      if (run.talents.unlockedNodeIds.includes(t.id)) return false;
-      const prereqsMet = t.prerequisites.every((p) =>
-        run.talents.unlockedNodeIds.includes(p)
-      );
-      if (!prereqsMet) return false;
-      const cost = t.costEssence * stats.talentCostMultiplier;
-      return run.resources.essence >= cost;
-    });
-
-    if (affordable.length > 0) {
-      // Pick talent with highest power benefit
-      const best = affordable.reduce((a, b) => {
-        const scoreA = a.modifiers.reduce(
-          (s, m) => (m.stat === "power" ? s + m.value : s),
-          0
-        );
-        const scoreB = b.modifiers.reduce(
-          (s, m) => (m.stat === "power" ? s + m.value : s),
-          0
-        );
-        return scoreA >= scoreB ? a : b;
-      });
-      return { type: "UNLOCK_TALENT", nodeId: best.id };
-    }
-
-    // 4. Enter best affordable dungeon
-    const availableDungeons = DUNGEONS.filter(
-      (d) =>
-        save.meta.unlockedDungeonIds.includes(d.id) &&
-        run.resources.gold >= d.goldCost
-    );
-
-    if (availableDungeons.length > 0) {
-      // Prefer deepest dungeon we can afford
-      const best = availableDungeons.reduce((a, b) =>
-        b.depthIndex > a.depthIndex ? b : a
-      );
-      return {
-        type: "START_DUNGEON",
-        dungeonId: best.id,
-        nowUnixSec,
-      };
-    }
-
-    return null;
   }
 }

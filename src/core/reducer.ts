@@ -1,4 +1,4 @@
-import type { SaveFile, RunState, ItemInstance } from "./types";
+import type { SaveFile, RunState, ItemInstance, Tag } from "./types";
 import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
 import { tickLifespan, applyDungeonWear } from "./lifespan";
@@ -16,9 +16,17 @@ import { BALANCE } from "../content/balance";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-let _instanceCounter = 0;
-function makeInstanceId(): string {
-  return `inst_${Date.now()}_${++_instanceCounter}`;
+function makeInstanceId(
+  seed: number,
+  lootTableId: string,
+  rollIndex: number,
+  dropIndex: number,
+  itemId: string
+): string {
+  return `inst_${deriveSeed(
+    seed,
+    `${lootTableId}:${rollIndex}:${dropIndex}:${itemId}`
+  ).toString(16)}`;
 }
 
 function makeCodexEntryId(kind: "item" | "trait", id: string): string {
@@ -69,7 +77,10 @@ function rollLoot(
   lootTableId: string,
   seed: number,
   rollIndex: number,
-  stats: ReturnType<typeof computeStats>
+  stats: ReturnType<typeof computeStats>,
+  run: RunState,
+  dungeonTags: Tag[],
+  dungeonDifficulty: number
 ): { items: ItemInstance[]; gold: number; essence: number } {
   const table = LOOT_TABLE_REGISTRY.get(lootTableId);
   if (!table) return { items: [], gold: 0, essence: 0 };
@@ -84,14 +95,37 @@ function rollLoot(
   const items: ItemInstance[] = [];
   const dropCount = Math.max(
     0,
-    table.baseDropCount + (rng.nextFloat() < 0.3 * stats.itemFindRate ? 1 : 0)
+    table.baseDropCount +
+      (rng.nextFloat() < BALANCE.loot.bonusDropChancePerItemFind * stats.itemFindRate ? 1 : 0)
   );
 
-  for (let i = 0; i < dropCount; i++) {
-    const legendary = rng.nextFloat() < stats.legendaryDropRate;
-    const rare = !legendary && rng.nextFloat() < 0.2;
+  const positiveAlignment = Math.max(0, run.alignment.holyUnholy);
+  const negativeAlignment = Math.max(0, -run.alignment.holyUnholy);
+  const alignmentSynergy =
+    (dungeonTags.includes("holy") || dungeonTags.includes("shrine") ? positiveAlignment : 0) +
+    (dungeonTags.includes("unholy") || dungeonTags.includes("abyss") || dungeonTags.includes("decay")
+      ? negativeAlignment
+      : 0) +
+    (dungeonTags.includes("fate") ? Math.abs(run.alignment.holyUnholy) * 0.35 : 0);
 
-    const rarityFilter = legendary ? "legendary" : rare ? "rare" : "common";
+  for (let i = 0; i < dropCount; i++) {
+    const rarityWeights = {
+      common: table.rarityWeights.common,
+      rare:
+        table.rarityWeights.rare +
+        dungeonDifficulty * BALANCE.loot.rareDifficultyWeight +
+        alignmentSynergy * BALANCE.loot.rareAlignmentWeight +
+        Math.max(0, stats.itemFindRate - 1) * BALANCE.loot.itemFindRareWeight,
+      legendary:
+        table.rarityWeights.legendary +
+        dungeonDifficulty * BALANCE.loot.legendaryDifficultyWeight +
+        alignmentSynergy * BALANCE.loot.legendaryAlignmentWeight +
+        stats.legendaryDropRate * BALANCE.loot.legendaryStatWeight,
+    };
+    const rarityFilter = rng.weightedPick(
+      ["common", "rare", "legendary"] as const,
+      [rarityWeights.common, rarityWeights.rare, rarityWeights.legendary]
+    );
     const filtered = table.entries.filter((e) => {
       const def = ITEM_REGISTRY.get(e.itemId);
       return def?.rarity === rarityFilter;
@@ -99,7 +133,10 @@ function rollLoot(
 
     const pool = filtered.length > 0 ? filtered : table.entries;
     const chosen = rng.weightedPick(pool, pool.map((e) => e.weight));
-    items.push({ instanceId: makeInstanceId(), itemId: chosen.itemId });
+    items.push({
+      instanceId: makeInstanceId(seed, lootTableId, rollIndex, i, chosen.itemId),
+      itemId: chosen.itemId,
+    });
   }
 
   return { items, gold, essence };
@@ -222,6 +259,40 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       };
     }
 
+    case "UNLOCK_JOB": {
+      const job = JOB_REGISTRY.get(event.jobId);
+      if (!job) return state;
+      if (state.meta.unlockedJobIds.includes(event.jobId)) return state;
+      const cost = job.unlockRequirement?.legacyAsh ?? 0;
+      if (state.meta.legacyAsh < cost) return state;
+
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          legacyAsh: state.meta.legacyAsh - cost,
+          unlockedJobIds: [...state.meta.unlockedJobIds, event.jobId],
+        },
+      };
+    }
+
+    case "UNLOCK_DUNGEON": {
+      const dungeon = DUNGEON_REGISTRY.get(event.dungeonId);
+      if (!dungeon) return state;
+      if (state.meta.unlockedDungeonIds.includes(event.dungeonId)) return state;
+      const cost = dungeon.unlockRequirement?.legacyAsh ?? 0;
+      if (state.meta.legacyAsh < cost) return state;
+
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          legacyAsh: state.meta.legacyAsh - cost,
+          unlockedDungeonIds: [...state.meta.unlockedDungeonIds, event.dungeonId],
+        },
+      };
+    }
+
     case "START_DUNGEON": {
       if (!state.currentRun?.alive) return state;
       if (state.currentRun.currentDungeon) return state; // already in dungeon
@@ -271,7 +342,15 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const lootRollIdx = state.currentRun.totalDungeonsCompleted;
       const loot =
         outcome !== "failure"
-          ? rollLoot(dungeon.lootTableId, state.currentRun.seed, lootRollIdx, stats)
+          ? rollLoot(
+              dungeon.lootTableId,
+              state.currentRun.seed,
+              lootRollIdx,
+              stats,
+              state.currentRun,
+              dungeon.tags,
+              dungeon.difficulty
+            )
           : { items: [], gold: 0, essence: 0 };
 
       // Wear (always applied even on failure)
@@ -337,18 +416,6 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         ? [...new Set([...state.currentRun.bossesCleared, dungeon.id])]
         : state.currentRun.bossesCleared;
 
-      // Unlock next dungeons/jobs based on depth (MVP: driven by discovery not defeat)
-      const newUnlockedDungeons = [...state.meta.unlockedDungeonIds];
-      const newUnlockedJobs = [...state.meta.unlockedJobIds];
-
-      // Auto-unlock via meta progression on boss clear or depth
-      if (dungeon.depthIndex >= 1 && !newUnlockedJobs.includes("scavenger")) {
-        // Scavenger unlocked after first non-chapel dungeon
-        if (state.meta.legacyAsh >= (BALANCE.unlockCost["scavenger"] ?? 3)) {
-          newUnlockedJobs.push("scavenger");
-        }
-      }
-
       trackEvent("dungeon_completed", {
         dungeonId: dungeon.id,
         outcome,
@@ -366,8 +433,6 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           discoveredItemIds: [...newDiscoveries],
           discoveredTraitIds: [...newTraitDiscoveries],
           codexEntries: [...newCodexEntries],
-          unlockedDungeonIds: newUnlockedDungeons,
-          unlockedJobIds: newUnlockedJobs,
         },
         currentRun: {
           ...state.currentRun,
@@ -462,6 +527,89 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             ...state.currentRun.resources,
             essence: state.currentRun.resources.essence + essence,
           },
+        },
+      };
+    }
+
+    case "DEBUG_ADD_RESOURCES": {
+      if (!state.currentRun) return state;
+
+      return {
+        ...state,
+        currentRun: {
+          ...state.currentRun,
+          resources: {
+            gold: state.currentRun.resources.gold + (event.gold ?? 0),
+            essence: state.currentRun.resources.essence + (event.essence ?? 0),
+          },
+        },
+      };
+    }
+
+    case "DEBUG_UNLOCK_JOB": {
+      if (state.meta.unlockedJobIds.includes(event.jobId)) return state;
+      if (!JOB_REGISTRY.has(event.jobId)) return state;
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          unlockedJobIds: [...state.meta.unlockedJobIds, event.jobId],
+        },
+      };
+    }
+
+    case "DEBUG_UNLOCK_DUNGEON": {
+      if (state.meta.unlockedDungeonIds.includes(event.dungeonId)) return state;
+      if (!DUNGEON_REGISTRY.has(event.dungeonId)) return state;
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          unlockedDungeonIds: [...state.meta.unlockedDungeonIds, event.dungeonId],
+        },
+      };
+    }
+
+    case "DEBUG_GRANT_ITEM": {
+      if (!state.currentRun) return state;
+      if (!ITEM_REGISTRY.has(event.itemId)) return state;
+
+      const nextIndex = state.currentRun.inventory.items.filter(
+        (item) => item.itemId === event.itemId
+      ).length;
+
+      return {
+        ...state,
+        currentRun: {
+          ...state.currentRun,
+          inventory: {
+            items: [
+              ...state.currentRun.inventory.items,
+              {
+                instanceId: makeInstanceId(
+                  state.currentRun.seed,
+                  "debug",
+                  state.currentRun.totalDungeonsCompleted,
+                  nextIndex,
+                  event.itemId
+                ),
+                itemId: event.itemId,
+              },
+            ],
+          },
+        },
+      };
+    }
+
+    case "DEBUG_KILL_RUN": {
+      if (!state.currentRun) return state;
+      return {
+        ...state,
+        currentRun: {
+          ...state.currentRun,
+          alive: false,
+          currentJobId: null,
+          lifespan: { ...state.currentRun.lifespan, vitality: 0 },
         },
       };
     }
@@ -571,17 +719,21 @@ export function reconcileOffline(save: SaveFile, nowUnixSec: number): SaveFile {
   const simulatedNow = save.updatedAtUnixSec + elapsed;
   let current = save;
 
-  // Step 1: Complete any expired dungeon
-  const dungeon = save.currentRun.currentDungeon;
-  if (dungeon && simulatedNow >= dungeon.completesAtUnixSec) {
-    current = reduceGame(current, {
-      type: "COMPLETE_DUNGEON",
-      nowUnixSec: dungeon.completesAtUnixSec,
-    });
+  while (current.currentRun?.alive) {
+    const completionAt = current.currentRun.currentDungeon?.completesAtUnixSec;
+    if (
+      completionAt == null ||
+      completionAt > simulatedNow ||
+      completionAt <= current.currentRun.lastTickUnixSec
+    ) {
+      break;
+    }
+
+    current = reduceGame(current, { type: "TICK", nowUnixSec: completionAt });
+    current = reduceGame(current, { type: "COMPLETE_DUNGEON", nowUnixSec: completionAt });
   }
 
-  // Step 2: Apply job income and lifespan tick for remaining time
-  if (current.currentRun?.alive) {
+  if (current.currentRun?.alive && current.currentRun.lastTickUnixSec < simulatedNow) {
     current = reduceGame(current, { type: "TICK", nowUnixSec: simulatedNow });
   }
 

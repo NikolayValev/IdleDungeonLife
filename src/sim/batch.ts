@@ -1,120 +1,129 @@
 import type { RunScore } from "../core/scoring";
 import { reduceGame } from "../core/reducer";
-import { BaselinePolicy, type Policy } from "./policies";
-import { evaluateRun } from "./evaluator";
 import { freshSave } from "../core/save";
 import { LocalArrayAnalyticsSink, setAnalyticsSink, ConsoleAnalyticsSink } from "../core/analytics";
+import { BaselinePolicy, type Policy } from "./policies";
+import { evaluateRun } from "./evaluator";
+import { stepRun } from "./step";
 
-export interface BatchConfig {
-  runs: number;
-  seed?: number;
+export interface BatchOptions {
   durationSec?: number;
   stepSec?: number;
   policy?: Policy;
   silent?: boolean;
 }
 
-export interface BatchResult {
-  runIndex: number;
+export interface BatchRunResult {
   seed: number;
   score: RunScore;
-  ageSeconds: number;
-  deepestDungeonIndex: number;
-  legacyAshEarned: number;
-  bossesCleared: number;
+  survivalTime: number;
+  depth: number;
+  discoveries: number;
+  ash: number;
   totalDungeons: number;
+  bossesCleared: number;
+  traits: string[];
+  items: string[];
 }
 
-export interface BatchSummary {
-  results: BatchResult[];
-  avgScore: number;
-  avgAgeSeconds: number;
-  avgDepth: number;
-  avgLegacyAsh: number;
+export interface BatchResult {
+  runs: BatchRunResult[];
+  scoreDistribution: Record<string, number>;
+  averages: {
+    score: number;
+    survivalTime: number;
+    depth: number;
+    discoveries: number;
+    ash: number;
+    totalDungeons: number;
+  };
 }
 
-/**
- * Run N headless simulated runs and return aggregated stats.
- * Seeds are deterministic: base seed + run index.
- */
-export function runBatch(config: BatchConfig): BatchSummary {
+function bucketScore(score: number): string {
+  const bucketSize = 100;
+  const start = Math.floor(score / bucketSize) * bucketSize;
+  return `${start}-${start + bucketSize - 1}`;
+}
+
+export function runBatch(
+  seedStart: number,
+  count: number,
+  options: BatchOptions = {}
+): BatchResult {
   const {
-    runs,
-    seed: baseSeed = 1337,
-    durationSec = 3600 * 2, // 2 hours simulated
+    durationSec = 2 * 3600,
     stepSec = 10,
     policy = new BaselinePolicy(),
     silent = true,
-  } = config;
+  } = options;
 
+  const previousSink = new ConsoleAnalyticsSink();
   const sink = new LocalArrayAnalyticsSink();
-  if (silent) setAnalyticsSink(sink);
+  if (silent) {
+    setAnalyticsSink(sink);
+  }
 
-  const results: BatchResult[] = [];
-  const START_TIME = 1_000_000;
+  const runs: BatchRunResult[] = [];
+  const scoreDistribution: Record<string, number> = {};
+  const startTime = 1_000_000;
 
-  for (let i = 0; i < runs; i++) {
-    const runSeed = (baseSeed + i * 7919) >>> 0;
-    let save = freshSave(START_TIME);
+  for (let index = 0; index < count; index++) {
+    const seed = seedStart + index;
+    let save = freshSave(startTime);
+    save = reduceGame(save, { type: "START_NEW_RUN", nowUnixSec: startTime, seed });
 
-    // Start run with deterministic seed
-    save = reduceGame(save, {
-      type: "START_NEW_RUN",
-      nowUnixSec: START_TIME,
-      seed: runSeed,
-    });
-
-    let now = START_TIME;
-    const end = START_TIME + durationSec;
+    let now = startTime;
+    const end = startTime + durationSec;
 
     while (now < end && save.currentRun?.alive) {
       now = Math.min(now + stepSec, end);
-
-      // Check dungeon completion
-      const dungeon = save.currentRun.currentDungeon;
-      if (dungeon && now >= dungeon.completesAtUnixSec) {
-        save = reduceGame(save, {
-          type: "COMPLETE_DUNGEON",
-          nowUnixSec: dungeon.completesAtUnixSec,
-        });
-      }
-
-      // Policy decision
-      const action = policy.decide(save, now);
-      if (action) {
-        save = reduceGame(save, action as any);
-      }
-
-      // Tick
-      save = reduceGame(save, { type: "TICK", nowUnixSec: now });
+      save = stepRun(save, now, policy);
     }
 
-    // Claim death if alive at end of sim
-    if (save.currentRun) {
-      save = reduceGame(save, { type: "CLAIM_DEATH", nowUnixSec: now });
+    const finalRun = save.currentRun;
+    if (!finalRun) {
+      continue;
     }
 
-    const score = evaluateRun(save);
-    const run = save.currentRun;
+    const scoredRun = evaluateRun(finalRun, save.meta);
+    const discoveries =
+      save.meta.discoveredItemIds.length + save.meta.discoveredTraitIds.length;
 
-    results.push({
-      runIndex: i,
-      seed: runSeed,
-      score,
-      ageSeconds: run?.lifespan.ageSeconds ?? 0,
-      deepestDungeonIndex: run?.deepestDungeonIndex ?? 0,
-      legacyAshEarned: save.meta.legacyAsh,
-      bossesCleared: run?.bossesCleared.length ?? 0,
-      totalDungeons: run?.totalDungeonsCompleted ?? 0,
-    });
+    save = reduceGame(save, { type: "CLAIM_DEATH", nowUnixSec: now });
+
+    const result: BatchRunResult = {
+      seed,
+      score: scoredRun,
+      survivalTime: finalRun.lifespan.ageSeconds,
+      depth: finalRun.deepestDungeonIndex,
+      discoveries,
+      ash: save.meta.legacyAsh,
+      totalDungeons: finalRun.totalDungeonsCompleted,
+      bossesCleared: finalRun.bossesCleared.length,
+      traits: [...finalRun.visibleTraitIds, ...finalRun.hiddenTraitIds],
+      items: finalRun.inventory.items.map((item) => item.itemId),
+    };
+
+    runs.push(result);
+    const bucket = bucketScore(result.score.total);
+    scoreDistribution[bucket] = (scoreDistribution[bucket] ?? 0) + 1;
   }
 
-  const avgScore = results.reduce((s, r) => s + r.score.total, 0) / runs;
-  const avgAgeSeconds = results.reduce((s, r) => s + r.ageSeconds, 0) / runs;
-  const avgDepth = results.reduce((s, r) => s + r.deepestDungeonIndex, 0) / runs;
-  const avgLegacyAsh = results.reduce((s, r) => s + r.legacyAshEarned, 0) / runs;
+  if (silent) {
+    setAnalyticsSink(previousSink);
+  }
 
-  if (silent) setAnalyticsSink(new ConsoleAnalyticsSink());
-
-  return { results, avgScore, avgAgeSeconds, avgDepth, avgLegacyAsh };
+  const divisor = Math.max(1, runs.length);
+  return {
+    runs,
+    scoreDistribution,
+    averages: {
+      score: runs.reduce((sum, run) => sum + run.score.total, 0) / divisor,
+      survivalTime: runs.reduce((sum, run) => sum + run.survivalTime, 0) / divisor,
+      depth: runs.reduce((sum, run) => sum + run.depth, 0) / divisor,
+      discoveries: runs.reduce((sum, run) => sum + run.discoveries, 0) / divisor,
+      ash: runs.reduce((sum, run) => sum + run.ash, 0) / divisor,
+      totalDungeons: runs.reduce((sum, run) => sum + run.totalDungeons, 0) / divisor,
+    },
+  };
 }
