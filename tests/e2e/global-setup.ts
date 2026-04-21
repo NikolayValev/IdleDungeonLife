@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -6,8 +6,12 @@ const BASE_URL = "http://127.0.0.1:5174";
 const RUNTIME_DIR = join(process.cwd(), ".runtime");
 const OWNER_FILE = join(RUNTIME_DIR, "playwright-server-owner.txt");
 
-function npmCommand(): string {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+function runNpmScript(script: string): void {
+  execSync(`npm run ${script}`, {
+    cwd: process.cwd(),
+    stdio: "inherit",
+    shell: true,
+  });
 }
 
 async function waitForServer(url: string, timeoutMs: number): Promise<void> {
@@ -46,10 +50,7 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
-  execFileSync(npmCommand(), ["run", "dev:start"], {
-    cwd: process.cwd(),
-    stdio: "inherit",
-  });
+  runNpmScript("dev:start");
 
   await waitForServer(BASE_URL, 15_000);
   writeFileSync(OWNER_FILE, "started\n", "utf8");

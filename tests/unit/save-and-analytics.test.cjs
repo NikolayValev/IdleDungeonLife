@@ -8,6 +8,7 @@ const {
   freshSave,
   SAVE_VERSION,
 } = require("../../.test-build/src/core/save.js");
+const { startRun } = require("./helpers.cjs");
 const {
   LocalArrayAnalyticsSink,
   setAnalyticsSink,
@@ -46,6 +47,69 @@ test("parseSave rejects unsupported future versions and tolerates old or missing
     })
   );
   assert.equal(parsed.version, SAVE_VERSION);
+});
+
+test("parseSave drops structurally invalid active runs", () => {
+  const parsed = parseSave(
+    JSON.stringify({
+      version: SAVE_VERSION,
+      updatedAtUnixSec: 100,
+      meta: {},
+      currentRun: {},
+    })
+  );
+
+  assert.ok(parsed);
+  assert.equal(parsed.currentRun, null);
+  assert.deepStrictEqual(parsed.meta.unlockedDungeonIds, ["abandoned_chapel"]);
+  assert.deepStrictEqual(parsed.meta.unlockedJobIds, ["porter"]);
+});
+
+test("parseSave normalizes salvageable active run fields", () => {
+  const save = startRun(123, 1000);
+  const run = save.currentRun;
+  assert.ok(run);
+
+  const parsed = parseSave(
+    JSON.stringify({
+      ...save,
+      currentRun: {
+        ...run,
+        visibleTraitIds: ["grave_touched", "grave_touched"],
+        hiddenTraitIds: ["fated", 7],
+        inventory: {
+          items: [
+            { instanceId: "valid_1", itemId: "rusted_blade" },
+            { instanceId: "missing_item_id" },
+          ],
+        },
+        resources: { gold: -5, essence: 3 },
+        lifespan: { ageSeconds: -20, vitality: 125, stage: "impossible" },
+        currentDungeon: {
+          dungeonId: "abandoned_chapel",
+          startedAtUnixSec: 1200,
+          completesAtUnixSec: 1100,
+        },
+      },
+    })
+  );
+
+  assert.ok(parsed?.currentRun);
+  assert.deepStrictEqual(parsed.currentRun.visibleTraitIds, ["grave_touched"]);
+  assert.deepStrictEqual(parsed.currentRun.hiddenTraitIds, []);
+  assert.deepStrictEqual(parsed.currentRun.inventory.items, [
+    { instanceId: "valid_1", itemId: "rusted_blade" },
+  ]);
+  assert.equal(parsed.currentRun.resources.gold, 0);
+  assert.equal(parsed.currentRun.resources.essence, 3);
+  assert.equal(parsed.currentRun.lifespan.ageSeconds, 0);
+  assert.equal(parsed.currentRun.lifespan.vitality, 100);
+  assert.equal(parsed.currentRun.lifespan.stage, "youth");
+  assert.deepStrictEqual(parsed.currentRun.currentDungeon, {
+    dungeonId: "abandoned_chapel",
+    startedAtUnixSec: 1200,
+    completesAtUnixSec: 1200,
+  });
 });
 
 test("loadFromStorage does not crash on invalid payloads", () => {

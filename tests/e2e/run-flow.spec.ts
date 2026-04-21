@@ -23,14 +23,12 @@ test.describe("active run flow", () => {
     expect(state.activeScenes).toContain("HudScene");
     expect(state.run?.alive).toBe(true);
 
-    await page.evaluate(() => {
-      (window as any).__test.startScene("JobsScene");
-      (window as any).__test.dispatch({ type: "ASSIGN_JOB", jobId: "porter" });
-    });
+    await emitSceneButtonByText(page, "MainScene", "[ Assign Porter ]");
+    await page.waitForTimeout(300);
 
     state = await getState(page);
     expect(state.run?.jobId).toBe("porter");
-    expect(state.activeScenes).toContain("JobsScene");
+    expect(state.activeScenes).toContain("MainScene");
 
     await page.evaluate(() => {
       (window as any).__test.startScene("MainScene");
@@ -168,7 +166,14 @@ test.describe("active run flow", () => {
     await emitSceneButtonByText(page, "CodexScene", "[ Items ]");
     await page.waitForTimeout(300);
     let codexTexts = await getSceneTexts(page, "CodexScene");
-    if (!codexTexts.includes(droppedItem!.name)) {
+
+    while (!codexTexts.includes(droppedItem!.name)) {
+      const pageLine = codexTexts.find((entry) => entry.startsWith("Page "));
+      const match = pageLine?.match(/Page (\d+)\/(\d+)/);
+      if (!match || Number(match[1]) >= Number(match[2])) {
+        break;
+      }
+
       await emitSceneButtonByText(page, "CodexScene", "[ Next ]");
       await page.waitForTimeout(300);
       codexTexts = await getSceneTexts(page, "CodexScene");

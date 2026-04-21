@@ -1,11 +1,15 @@
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const OWNER_FILE = join(process.cwd(), ".runtime", "playwright-server-owner.txt");
 
-function npmCommand(): string {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+function runNpmScript(script: string): void {
+  execSync(`npm run ${script}`, {
+    cwd: process.cwd(),
+    stdio: "inherit",
+    shell: true,
+  });
 }
 
 export default async function globalTeardown(): Promise<void> {
@@ -18,10 +22,7 @@ export default async function globalTeardown(): Promise<void> {
 
   try {
     if (owner === "started") {
-      execFileSync(npmCommand(), ["run", "dev:stop"], {
-        cwd: process.cwd(),
-        stdio: "inherit",
-      });
+      runNpmScript("dev:stop");
     }
   } finally {
     rmSync(OWNER_FILE, { force: true });

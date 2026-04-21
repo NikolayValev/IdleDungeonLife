@@ -83,3 +83,29 @@ Original prompt: help me run this
 - `npm run build` passes.
 - `npm run test:unit` passes.
 - `npm run test:e2e` passes with 4/4 specs green.
+
+2026-04-20
+- Follow-up prompt: "continue development"
+- Continued hardening from the deterministic core/save work:
+- `parseSave`/`migrateSave` now validate and normalize active run payloads instead of trusting `currentRun` blindly. Structurally invalid active runs are dropped to `null`; salvageable runs keep valid fields while clamping/normalizing nested resources, lifespan, traits, inventory, equipment, talents, active dungeon timing, and boss clear lists.
+- Added unit coverage for corrupted save payloads and salvageable active-run migration.
+- Fixed Playwright global setup/teardown on this Windows environment by running npm scripts through shell execution; direct `execFileSync("npm.cmd", ...)` fails here with `spawnSync npm.cmd EINVAL`.
+- Hardened the run-flow e2e Codex assertion to page through all advertised known-item pages before checking the newly dropped dungeon item.
+- Enabled Phaser `preserveDrawingBuffer` so automated canvas screenshots capture the rendered scene instead of a black WebGL buffer.
+- Validation:
+- `npm run build` passes.
+- `npm run test:unit` passes with 31/31 tests green.
+- `npm run test:e2e` passes with 4/4 specs green.
+- Skill smoke client run completed against http://127.0.0.1:5174/ with screenshots in `artifacts/skill-smoke/`; latest screenshot was visually inspected and shows the main run UI plus avatar, and no `errors-*.json` artifacts were produced.
+- The dev server is currently running on http://127.0.0.1:5174/ (PID recorded in `.runtime/vite.pid`).
+- Follow-up prompt: "ok polish it more"
+- Polished `MainScene` into a clearer home dashboard:
+- replaced the flat footer text block with a stronger status hierarchy, age readout, labeled vitality bar, section dividers, improved avatar framing, and compact resource chips.
+- added contextual home-scene quick actions so a fresh run can assign Porter directly from Home, and a funded run can enter Abandoned Chapel without first changing tabs.
+- kept the dungeon timer and collect flow text stable on Home so existing behavior remains inspectable.
+- extended the active-run e2e spec to use the new `[ Assign Porter ]` home quick action before verifying the rest of the run flow.
+- Validation:
+- `npm run build` passes.
+- `npm run test:unit` passes.
+- `npm run test:e2e` passes with 4/4 specs green.
+- Final smoke screenshot captured in `artifacts/polish-final/shot-0.png`; visually inspected and matched against `artifacts/polish-final/state-0.json`.

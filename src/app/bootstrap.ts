@@ -27,6 +27,7 @@ const config: Phaser.Types.Core.GameConfig = {
     antialias: false,
     antialiasGL: false,
     roundPixels: true,
+    preserveDrawingBuffer: true,
   },
   scale: {
     mode: Phaser.Scale.FIT,
