@@ -1,4 +1,5 @@
 import type { RunScore } from "../core/scoring";
+import { computeLegacyAshReward } from "../core/scoring";
 import { reduceGame } from "../core/reducer";
 import { freshSave } from "../core/save";
 import { LocalArrayAnalyticsSink, setAnalyticsSink, ConsoleAnalyticsSink } from "../core/analytics";
@@ -89,7 +90,7 @@ export function runBatch(
     const discoveries =
       save.meta.discoveredItemIds.length + save.meta.discoveredTraitIds.length;
 
-    save = reduceGame(save, { type: "CLAIM_DEATH", nowUnixSec: now });
+    const projectedAsh = save.meta.legacyAsh + computeLegacyAshReward(finalRun);
 
     const result: BatchRunResult = {
       seed,
@@ -97,7 +98,9 @@ export function runBatch(
       survivalTime: finalRun.lifespan.ageSeconds,
       depth: finalRun.deepestDungeonIndex,
       discoveries,
-      ash: save.meta.legacyAsh,
+      // Report ash the run has earned by the end of the simulation window
+      // without mutating reducer state or requiring an invalid death claim.
+      ash: projectedAsh,
       totalDungeons: finalRun.totalDungeonsCompleted,
       bossesCleared: finalRun.bossesCleared.length,
       traits: [...finalRun.visibleTraitIds, ...finalRun.hiddenTraitIds],

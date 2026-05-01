@@ -34,6 +34,8 @@ interface TraitEntryView extends CodexEntryBase {
   flavorText: string;
   hint: string;
   source?: string;
+  evolved: boolean;
+  evolutionHint: string | null;
 }
 
 interface ItemEntryView extends CodexEntryBase {
@@ -95,6 +97,22 @@ function labelForDiscoveryFilter(filter: DiscoveryFilter): string {
     case "known": return "[ Known ]";
     case "unknown": return "[ Unknown ]";
     case "all": return "[ All ]";
+  }
+}
+
+function buildEvolutionHint(rule: TraitRevealRule): string {
+  switch (rule.triggerEvent) {
+    case "dungeonCompleted":
+      return rule.dungeonTag
+        ? `Evolves: complete a ${rule.dungeonTag} dungeon.`
+        : "Evolves: complete a dungeon tied to this memory.";
+    case "alignmentThreshold":
+      if ((rule.value ?? 0) < 0) {
+        return `Evolves: drift unholy to ${rule.value}.`;
+      }
+      return `Evolves: drift holy to ${rule.value}.`;
+    case "ageReached":
+      return `Evolves: survive to ${rule.value}s of age.`;
   }
 }
 
@@ -228,22 +246,31 @@ export class CodexScene extends BaseScene {
       ...this.saveFile.meta.discoveredItemIds,
       ...(this.saveFile.currentRun?.inventory.items.map((item) => item.itemId) ?? []),
     ]);
+    const evolvedTraitIds = new Set(this.saveFile.currentRun?.evolvedTraitIds ?? []);
 
     const traitEntries = TRAITS
       .map((trait): TraitEntryView => {
         const known = knownTraitIds.has(trait.id);
+        const evolved = evolvedTraitIds.has(trait.id);
+        const evolutionHint = known && trait.evolutionRules?.[0]
+          ? buildEvolutionHint(trait.evolutionRules[0])
+          : null;
         return {
           type: "trait",
           id: trait.id,
           known,
-          name: known ? trait.name : "Unknown Trait",
+          evolved,
+          evolutionHint,
+          name: known ? (evolved && trait.evolutionName ? trait.evolutionName : trait.name) : "Unknown Trait",
           tags: trait.tags,
           description: known
-            ? trait.description
+            ? (evolved && trait.evolutionDescription ? trait.evolutionDescription : trait.description)
             : trait.revealMode === "hidden"
             ? "Completely sealed. Only an omen remains."
             : "Something about this trait is already leaking through.",
-          flavorText: known ? trait.flavorText : buildTraitHint(trait.revealRules?.[0]),
+          flavorText: known
+            ? (evolved && trait.evolutionFlavorText ? trait.evolutionFlavorText : trait.flavorText)
+            : buildTraitHint(trait.revealRules?.[0]),
           hint: buildTraitHint(trait.revealRules?.[0]),
           source: sourceHintForTags(trait.tags),
         };
@@ -257,6 +284,8 @@ export class CodexScene extends BaseScene {
               type: "trait" as const,
               id: entry.id,
               known: false,
+              evolved: false,
+              evolutionHint: null,
               name: entry.name,
               tags: entry.tags,
               description: `Placeholder archive. ${entry.source}.`,
@@ -456,10 +485,12 @@ export class CodexScene extends BaseScene {
 
     for (const entry of entries) {
       this.add.rectangle(LAYOUT.width / 2, y + 82, LAYOUT.cardWidth, 156, traitCardColor(entry), 0.95);
-      this.add.text(P + 8, y + 10, entry.name, {
+      const nameLabel = entry.evolved ? `${entry.name}  [evolved]` : entry.name;
+      const nameColor = entry.known ? (entry.evolved ? COLORS.accentHoly : COLORS.accent) : COLORS.textMuted;
+      this.add.text(P + 8, y + 10, nameLabel, {
         fontFamily: FONTS.body,
         fontSize: "15px",
-        color: entry.known ? COLORS.accent : COLORS.textMuted,
+        color: nameColor,
       });
       this.add.text(P + 8, y + 32, entry.known ? formatTags(entry.tags) : "[sealed memory]", {
         fontFamily: FONTS.body,
@@ -484,6 +515,14 @@ export class CodexScene extends BaseScene {
           fontFamily: FONTS.body,
           fontSize: "10px",
           color: COLORS.textSecondary,
+          wordWrap: { width: LAYOUT.cardWidth - 16 },
+        });
+      }
+      if (entry.known && !entry.evolved && entry.evolutionHint) {
+        this.add.text(P + 8, y + 132, entry.evolutionHint, {
+          fontFamily: FONTS.body,
+          fontSize: "10px",
+          color: COLORS.accent,
           wordWrap: { width: LAYOUT.cardWidth - 16 },
         });
       }

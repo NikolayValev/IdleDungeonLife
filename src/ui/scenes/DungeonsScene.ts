@@ -98,7 +98,7 @@ export class DungeonsScene extends BaseScene {
             0,
             run!.currentDungeon!.completesAtUnixSec - this.nowUnixSec
           );
-          this.add.text(LAYOUT.width - P - 8, y + 8, `⏱ ${remaining}s`, {
+          this.add.text(LAYOUT.width - P - 8, y + 8, `[${remaining}s]`, {
             fontFamily: FONTS.body,
             fontSize: "13px",
             color: COLORS.accent,

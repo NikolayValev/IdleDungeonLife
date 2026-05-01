@@ -1,4 +1,4 @@
-import type { SaveFile, RunState, ItemInstance, Tag } from "./types";
+﻿import type { SaveFile, RunState, ItemInstance, Tag, RunLogEntry, RunLogKind } from "./types";
 import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
 import { tickLifespan, applyDungeonWear } from "./lifespan";
@@ -13,8 +13,10 @@ import { TALENT_REGISTRY } from "../content/talents";
 import { LOOT_TABLE_REGISTRY } from "../content/lootTables";
 import { ITEM_REGISTRY } from "../content/items";
 import { BALANCE } from "../content/balance";
+import { LEGACY_PERK_REGISTRY, canPurchasePerk } from "../content/legacyPerks";
+import type { MetaProgress } from "./types";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
 
 function makeInstanceId(
   seed: number,
@@ -43,7 +45,91 @@ function clampAlignment(v: number): number {
   return Math.max(-100, Math.min(100, v));
 }
 
-// ─── Trait Generation ─────────────────────────────────────────────────────────
+function resourceMultiplier(value: number): number {
+  return Math.max(0, value);
+}
+
+function shouldRevealTrait(
+  run: RunState,
+  triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached",
+  rule: { triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached"; value?: number; dungeonTag?: Tag },
+  dungeonTags?: Tag[]
+): boolean {
+  if (rule.triggerEvent !== triggerEvent) {
+    return false;
+  }
+
+  switch (rule.triggerEvent) {
+    case "dungeonCompleted":
+      return !rule.dungeonTag || dungeonTags?.includes(rule.dungeonTag) === true;
+    case "alignmentThreshold":
+      if (rule.value == null) return false;
+      return rule.value < 0
+        ? run.alignment.holyUnholy <= rule.value
+        : run.alignment.holyUnholy >= rule.value;
+    case "ageReached":
+      return rule.value != null && run.lifespan.ageSeconds >= rule.value;
+  }
+}
+
+function revealTraitsForTrigger(
+  run: RunState,
+  triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached",
+  dungeonTags?: Tag[]
+): {
+  visibleTraitIds: string[];
+  hiddenTraitIds: string[];
+  revealedTraitIds: string[];
+} {
+  const visibleTraitIds = [...run.visibleTraitIds];
+  const hiddenTraitIds = [...run.hiddenTraitIds];
+  const revealedTraitIds: string[] = [];
+
+  for (const traitId of [...hiddenTraitIds]) {
+    const def = TRAIT_REGISTRY.get(traitId);
+    if (!def?.revealRules) continue;
+
+    const shouldReveal = def.revealRules.some((rule) =>
+      shouldRevealTrait(run, triggerEvent, rule, dungeonTags)
+    );
+
+    if (!shouldReveal) continue;
+
+    hiddenTraitIds.splice(hiddenTraitIds.indexOf(traitId), 1);
+    visibleTraitIds.push(traitId);
+    revealedTraitIds.push(traitId);
+  }
+
+  return { visibleTraitIds, hiddenTraitIds, revealedTraitIds };
+}
+
+function evolveTraitsForTrigger(
+  run: RunState,
+  triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached",
+  dungeonTags?: Tag[]
+): { evolvedTraitIds: string[]; newlyEvolvedIds: string[] } {
+  const evolvedTraitIds = [...run.evolvedTraitIds];
+  const newlyEvolvedIds: string[] = [];
+
+  const allTraitIds = [...run.visibleTraitIds, ...run.hiddenTraitIds];
+  for (const traitId of allTraitIds) {
+    if (evolvedTraitIds.includes(traitId)) continue; // already evolved
+    const def = TRAIT_REGISTRY.get(traitId);
+    if (!def?.evolutionRules) continue;
+
+    const shouldEvolve = def.evolutionRules.some((rule) =>
+      shouldRevealTrait(run, triggerEvent, rule, dungeonTags)
+    );
+    if (!shouldEvolve) continue;
+
+    evolvedTraitIds.push(traitId);
+    newlyEvolvedIds.push(traitId);
+  }
+
+  return { evolvedTraitIds, newlyEvolvedIds };
+}
+
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
 
 function generateStartingTraits(
   seed: number
@@ -71,7 +157,7 @@ function generateStartingTraits(
   return { visibleTraitIds: visible, hiddenTraitIds: hidden };
 }
 
-// ─── Loot Rolls ───────────────────────────────────────────────────────────────
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
 
 function rollLoot(
   lootTableId: string,
@@ -142,10 +228,30 @@ function rollLoot(
   return { items, gold, essence };
 }
 
-// ─── New Run Builder ──────────────────────────────────────────────────────────
+// ─── Run Log ─────────────────────────────────────────────────────────────────
 
-function buildNewRun(seed: number, nowUnixSec: number): RunState {
+const RUN_LOG_MAX = 50;
+
+function pushLog(run: RunState, kind: RunLogKind, message: string, timestampSec: number): RunState {
+  const entry: RunLogEntry = { kind, message, timestampSec };
+  const newLog = [...(run.runLog ?? []), entry];
+  return { ...run, runLog: newLog.length > RUN_LOG_MAX ? newLog.slice(newLog.length - RUN_LOG_MAX) : newLog };
+}
+
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
+
+function buildNewRun(seed: number, nowUnixSec: number, meta?: MetaProgress): RunState {
   const { visibleTraitIds, hiddenTraitIds } = generateStartingTraits(seed);
+
+  // Collect starting bonuses from legacy perks
+  let startingGold = BALANCE.startingGold;
+  let startingEssence = BALANCE.startingEssence;
+  const activeLegacyPerkIds: string[] = meta?.legacyPerks ?? [];
+  for (const perkId of activeLegacyPerkIds) {
+    const def = LEGACY_PERK_REGISTRY.get(perkId);
+    if (def?.startingGold) startingGold += def.startingGold;
+    if (def?.startingEssence) startingEssence += def.startingEssence;
+  }
 
   return {
     seed,
@@ -154,12 +260,16 @@ function buildNewRun(seed: number, nowUnixSec: number): RunState {
     lifespan: { ageSeconds: 0, vitality: 100, stage: "youth" },
     visibleTraitIds,
     hiddenTraitIds,
+    evolvedTraitIds: [],
+    discoveryMomentum: 0,
+    activeLegacyPerkIds,
+    legacyPath: meta?.legacyPath ?? null,
     inventory: { items: [] },
     equipment: {},
     talents: { unlockedNodeIds: [] },
     resources: {
-      gold: BALANCE.startingGold,
-      essence: BALANCE.startingEssence,
+      gold: startingGold,
+      essence: startingEssence,
     },
     currentDungeon: null,
     currentJobId: null,
@@ -167,10 +277,11 @@ function buildNewRun(seed: number, nowUnixSec: number): RunState {
     deepestDungeonIndex: -1,
     totalDungeonsCompleted: 0,
     bossesCleared: [],
+    runLog: [],
   };
 }
 
-// ─── Tick Logic ───────────────────────────────────────────────────────────────
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
 
 function applyTick(run: RunState, nowUnixSec: number): RunState {
   if (!run.alive) return run;
@@ -185,14 +296,21 @@ function applyTick(run: RunState, nowUnixSec: number): RunState {
   if (updated.currentJobId) {
     const job = JOB_REGISTRY.get(updated.currentJobId);
     if (job) {
-      const mult = stats.jobOutputMultiplier;
+      const goldMultiplier =
+        resourceMultiplier(stats.jobOutputMultiplier) *
+        resourceMultiplier(stats.goldRate);
+      const essenceMultiplier =
+        resourceMultiplier(stats.jobOutputMultiplier) *
+        resourceMultiplier(stats.essenceRate);
       updated = {
         ...updated,
         resources: {
-          gold: updated.resources.gold + job.baseGoldPerSec * mult * elapsed,
+          gold:
+            updated.resources.gold +
+            job.baseGoldPerSec * goldMultiplier * elapsed,
           essence:
             updated.resources.essence +
-            (job.baseEssencePerSec ?? 0) * mult * elapsed,
+            (job.baseEssencePerSec ?? 0) * essenceMultiplier * elapsed,
         },
       };
     }
@@ -213,14 +331,53 @@ function applyTick(run: RunState, nowUnixSec: number): RunState {
   return updated;
 }
 
-// ─── Main Reducer ─────────────────────────────────────────────────────────────
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
+
+/**
+ * Attempt a seeded trait reveal driven by accumulated discovery momentum.
+ * Each `revealThreshold` points of momentum triggers one reveal attempt.
+ */
+function applyDiscoveryMomentumReveals(
+  run: RunState,
+  newMomentum: number
+): { run: RunState; revealedTraitIds: string[] } {
+  const threshold = BALANCE.discoveryMomentum.revealThreshold;
+  const prevBracket = Math.floor(run.discoveryMomentum / threshold);
+  const newBracket = Math.floor(newMomentum / threshold);
+  const reveals = newBracket - prevBracket;
+  if (reveals <= 0) return { run: { ...run, discoveryMomentum: newMomentum }, revealedTraitIds: [] };
+
+  let current = { ...run, discoveryMomentum: newMomentum };
+  const allRevealedIds: string[] = [];
+
+  for (let i = 0; i < reveals; i++) {
+    // Only reveal if there are hidden traits remaining
+    if (current.hiddenTraitIds.length === 0) break;
+    // Seeded pick using accumulated momentum as an entropy source
+    const revealSeed = deriveSeed(current.seed, `momentum_reveal_${Math.floor(newMomentum)}_${i}`);
+    const rng = new SeededRandomProvider(revealSeed);
+    const hidden = [...current.hiddenTraitIds];
+    const idx = rng.nextInt(0, hidden.length - 1);
+    const picked = hidden[idx];
+    current = {
+      ...current,
+      hiddenTraitIds: current.hiddenTraitIds.filter((id) => id !== picked),
+      visibleTraitIds: [...current.visibleTraitIds, picked],
+    };
+    allRevealedIds.push(picked);
+  }
+
+  return { run: current, revealedTraitIds: allRevealedIds };
+}
+
+// ─── Offline Reconciliation ───────────────────────────────────────────────────
 
 export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
   switch (event.type) {
     case "START_NEW_RUN": {
       const seed =
         event.seed ?? Math.floor((event.nowUnixSec * 1234567) ^ 0xdeadbeef);
-      const run = buildNewRun(seed, event.nowUnixSec);
+      const run = buildNewRun(seed, event.nowUnixSec, state.meta);
 
       trackEvent("run_started", {
         seed,
@@ -243,10 +400,68 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
     case "TICK": {
       if (!state.currentRun) return state;
       const updated = applyTick(state.currentRun, event.nowUnixSec);
+      const ageReveal = revealTraitsForTrigger(updated, "ageReached");
+      const ageEvolve = evolveTraitsForTrigger(
+        { ...updated, visibleTraitIds: ageReveal.visibleTraitIds, hiddenTraitIds: ageReveal.hiddenTraitIds },
+        "ageReached"
+      );
+
+      // discoveryMomentum passively ticks (tiny rate, gated on discoveryRate)
+      const tickStats = computeStats(updated);
+      const elapsed = Math.max(0, event.nowUnixSec - state.currentRun.lastTickUnixSec);
+      const momentumGain = tickStats.discoveryRate * 0.004 * elapsed;
+      const rawMomentum = (updated.discoveryMomentum ?? 0) + momentumGain;
+
+      const momentumResult = applyDiscoveryMomentumReveals(
+        { ...updated, visibleTraitIds: ageReveal.visibleTraitIds, hiddenTraitIds: ageReveal.hiddenTraitIds, evolvedTraitIds: ageEvolve.evolvedTraitIds },
+        rawMomentum
+      );
+
+      const allRevealedIds = [...ageReveal.revealedTraitIds, ...momentumResult.revealedTraitIds];
+      const discoveredTraitIds =
+        allRevealedIds.length > 0 || ageEvolve.newlyEvolvedIds.length > 0
+          ? [...new Set([...state.meta.discoveredTraitIds, ...allRevealedIds])]
+          : state.meta.discoveredTraitIds;
+      const codexEntries =
+        allRevealedIds.length > 0
+          ? [
+              ...new Set([
+                ...state.meta.codexEntries,
+                ...allRevealedIds.map((traitId) => makeCodexEntryId("trait", traitId)),
+              ]),
+            ]
+          : state.meta.codexEntries;
+
+      // -- Run log entries for tick --
+      let tickFinalRun = momentumResult.run;
+      const prevVitality = state.currentRun.lifespan.vitality;
+      const newVitality = tickFinalRun.lifespan.vitality;
+      if (prevVitality > 20 && newVitality <= 20) {
+        tickFinalRun = pushLog(tickFinalRun, "death_warning", "Your body falters. The end draws near.", event.nowUnixSec);
+      } else if (prevVitality > 10 && newVitality <= 10) {
+        tickFinalRun = pushLog(tickFinalRun, "death_warning", "Vitality critical. You are nearly spent.", event.nowUnixSec);
+      }
+      for (const traitId of allRevealedIds) {
+        const def = TRAIT_REGISTRY.get(traitId);
+        if (def) tickFinalRun = pushLog(tickFinalRun, "trait_reveal", `A new aspect awakens: ${def.name}`, event.nowUnixSec);
+      }
+      for (const traitId of ageEvolve.newlyEvolvedIds) {
+        const def = TRAIT_REGISTRY.get(traitId);
+        if (def) {
+          const evolvedName = def.evolutionName ?? def.name;
+          tickFinalRun = pushLog(tickFinalRun, "trait_evolved", `[Evolution] ${def.name} -> ${evolvedName}`, event.nowUnixSec);
+        }
+      }
+
       return {
         ...state,
         updatedAtUnixSec: event.nowUnixSec,
-        currentRun: updated,
+        meta: {
+          ...state.meta,
+          discoveredTraitIds,
+          codexEntries,
+        },
+        currentRun: tickFinalRun,
       };
     }
 
@@ -265,6 +480,12 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       if (state.meta.unlockedJobIds.includes(event.jobId)) return state;
       const cost = job.unlockRequirement?.legacyAsh ?? 0;
       if (state.meta.legacyAsh < cost) return state;
+      // Check traitDiscovered gate
+      if (job.unlockRequirement?.traitDiscovered) {
+        if (!state.meta.discoveredTraitIds.includes(job.unlockRequirement.traitDiscovered)) {
+          return state;
+        }
+      }
 
       return {
         ...state,
@@ -281,6 +502,12 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       if (!dungeon) return state;
       if (state.meta.unlockedDungeonIds.includes(event.dungeonId)) return state;
       const cost = dungeon.unlockRequirement?.legacyAsh ?? 0;
+            // Check traitDiscovered gate
+            if (dungeon.unlockRequirement?.traitDiscovered) {
+              if (!state.meta.discoveredTraitIds.includes(dungeon.unlockRequirement.traitDiscovered)) {
+                return state;
+              }
+            }
       if (state.meta.legacyAsh < cost) return state;
 
       return {
@@ -352,6 +579,8 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
               dungeon.difficulty
             )
           : { items: [], gold: 0, essence: 0 };
+      const goldReward = loot.gold * resourceMultiplier(stats.goldRate);
+      const essenceReward = loot.essence * resourceMultiplier(stats.essenceRate);
 
       // Wear (always applied even on failure)
       const isBoss = dungeon.tags.includes("boss");
@@ -388,23 +617,31 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         trackEvent("item_found", { itemId: inst.itemId, dungeonId: dungeon.id });
       }
 
-      // Reveal hidden traits on dungeon completion if rules match
-      const newVisible = [...state.currentRun.visibleTraitIds];
-      const newHidden = [...state.currentRun.hiddenTraitIds];
-      for (const tid of [...newHidden]) {
-        const def = TRAIT_REGISTRY.get(tid);
-        if (!def?.revealRules) continue;
-        for (const rule of def.revealRules) {
-          if (
-            rule.triggerEvent === "dungeonCompleted" &&
-            (!rule.dungeonTag || dungeon.tags.includes(rule.dungeonTag))
-          ) {
-            newVisible.push(tid);
-            newHidden.splice(newHidden.indexOf(tid), 1);
-            newTraitDiscoveries.add(tid);
-            newCodexEntries.add(makeCodexEntryId("trait", tid));
-          }
-        }
+      const revealBaseRun: RunState = {
+        ...state.currentRun,
+        alignment: { holyUnholy: newAlignment },
+        lifespan: newLifespan,
+      };
+      const dungeonReveal = revealTraitsForTrigger(
+        revealBaseRun,
+        "dungeonCompleted",
+        dungeon.tags
+      );
+      const alignmentReveal = revealTraitsForTrigger(
+        {
+          ...revealBaseRun,
+          visibleTraitIds: dungeonReveal.visibleTraitIds,
+          hiddenTraitIds: dungeonReveal.hiddenTraitIds,
+        },
+        "alignmentThreshold"
+      );
+
+      for (const traitId of [
+        ...dungeonReveal.revealedTraitIds,
+        ...alignmentReveal.revealedTraitIds,
+      ]) {
+        newTraitDiscoveries.add(traitId);
+        newCodexEntries.add(makeCodexEntryId("trait", traitId));
       }
 
       // Track depth
@@ -420,11 +657,47 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         dungeonId: dungeon.id,
         outcome,
         lootCount: loot.items.length,
-        gold: loot.gold,
-        essence: loot.essence,
+        gold: goldReward,
+        essence: essenceReward,
       });
 
       const died = newLifespan.vitality <= 0;
+
+      // Trait evolutions triggered by dungeon completion and alignment
+      const dungeonEvolve = evolveTraitsForTrigger(
+        {
+          ...state.currentRun,
+          alignment: { holyUnholy: newAlignment },
+          lifespan: newLifespan,
+          visibleTraitIds: alignmentReveal.visibleTraitIds,
+          hiddenTraitIds: alignmentReveal.hiddenTraitIds,
+        },
+        "dungeonCompleted",
+        dungeon.tags
+      );
+      const postDungeonEvolveRun: RunState = {
+        ...state.currentRun,
+        alignment: { holyUnholy: newAlignment },
+        lifespan: newLifespan,
+        visibleTraitIds: alignmentReveal.visibleTraitIds,
+        hiddenTraitIds: alignmentReveal.hiddenTraitIds,
+        evolvedTraitIds: dungeonEvolve.evolvedTraitIds,
+      };
+      const alignmentEvolve = evolveTraitsForTrigger(postDungeonEvolveRun, "alignmentThreshold");
+      const finalEvolvedTraitIds = alignmentEvolve.evolvedTraitIds;
+      // Discovery momentum: gain per dungeon based on discoveryRate
+      const momentumGainDungeon = stats.discoveryRate * BALANCE.discoveryMomentum.perDungeonBase;
+      const preDungeonMomentum = state.currentRun.discoveryMomentum ?? 0;
+      const dungeonMomentumResult = applyDiscoveryMomentumReveals(
+        { ...postDungeonEvolveRun, evolvedTraitIds: finalEvolvedTraitIds },
+        preDungeonMomentum + momentumGainDungeon
+      );
+
+      // Merge newly revealed via momentum into discoveries
+      for (const traitId of dungeonMomentumResult.revealedTraitIds) {
+        newTraitDiscoveries.add(traitId);
+        newCodexEntries.add(makeCodexEntryId("trait", traitId));
+      }
 
       return {
         ...state,
@@ -434,26 +707,65 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           discoveredTraitIds: [...newTraitDiscoveries],
           codexEntries: [...newCodexEntries],
         },
-        currentRun: {
-          ...state.currentRun,
-          alive: !died,
-          currentDungeon: null,
-          currentJobId: died ? null : state.currentRun.currentJobId,
-          lifespan: newLifespan,
-          alignment: { holyUnholy: newAlignment },
-          visibleTraitIds: newVisible,
-          hiddenTraitIds: newHidden,
-          inventory: {
-            items: [...state.currentRun.inventory.items, ...loot.items],
-          },
-          resources: {
-            gold: state.currentRun.resources.gold + loot.gold,
-            essence: state.currentRun.resources.essence + loot.essence,
-          },
-          deepestDungeonIndex: newDepth,
-          totalDungeonsCompleted: state.currentRun.totalDungeonsCompleted + 1,
-          bossesCleared: newBossesCleared,
-        },
+        currentRun: (() => {
+          let completedRun: RunState = {
+            ...dungeonMomentumResult.run,
+            alive: !died,
+            currentDungeon: null,
+            currentJobId: died ? null : state.currentRun.currentJobId,
+            lifespan: newLifespan,
+            alignment: { holyUnholy: newAlignment },
+            evolvedTraitIds: finalEvolvedTraitIds,
+            inventory: {
+              items: [...state.currentRun.inventory.items, ...loot.items],
+            },
+            resources: {
+              gold: state.currentRun.resources.gold + goldReward,
+              essence: state.currentRun.resources.essence + essenceReward,
+            },
+            deepestDungeonIndex: newDepth,
+            totalDungeonsCompleted: state.currentRun.totalDungeonsCompleted + 1,
+            bossesCleared: newBossesCleared,
+          };
+          // Dungeon outcome flavor
+          if (dungeon.flavor) {
+            const flavorArr = dungeon.flavor[outcome];
+            if (flavorArr?.length) {
+              const flavorRng = new SeededRandomProvider(deriveSeed(state.currentRun.seed, `flavor_${state.currentRun.totalDungeonsCompleted}`));
+              completedRun = pushLog(completedRun, "dungeon", flavorArr[flavorRng.nextInt(0, flavorArr.length - 1)], event.nowUnixSec);
+            }
+          }
+          // Legendary drops
+          for (const inst of loot.items) {
+            const itemDef = ITEM_REGISTRY.get(inst.itemId);
+            if (itemDef?.rarity === "legendary") {
+              completedRun = pushLog(completedRun, "legendary", `A legendary relic surfaces: ${itemDef.name}`, event.nowUnixSec);
+            }
+          }
+          // Boss cleared (first time)
+          if (isBoss && !state.currentRun.bossesCleared.includes(dungeon.id)) {
+            completedRun = pushLog(completedRun, "boss", `You have bested ${dungeon.name}`, event.nowUnixSec);
+          }
+          // Trait reveals from dungeon completion
+          const allDungeonRevealedIds = [
+            ...dungeonReveal.revealedTraitIds,
+            ...alignmentReveal.revealedTraitIds,
+            ...dungeonMomentumResult.revealedTraitIds,
+          ];
+          for (const traitId of allDungeonRevealedIds) {
+            const def = TRAIT_REGISTRY.get(traitId);
+            if (def) completedRun = pushLog(completedRun, "trait_reveal", `A new aspect awakens: ${def.name}`, event.nowUnixSec);
+          }
+          // Trait evolutions
+          for (const traitId of [...dungeonEvolve.newlyEvolvedIds, ...alignmentEvolve.newlyEvolvedIds]) {
+            const def = TRAIT_REGISTRY.get(traitId);
+            if (def) {
+              const evolvedName = def.evolutionName ?? def.name;
+              completedRun = pushLog(completedRun, "trait_evolved", `[Evolution] ${def.name} -> ${evolvedName}`, event.nowUnixSec);
+            }
+          }
+          return completedRun;
+        })(),
       };
     }
 
@@ -626,9 +938,9 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       );
       if (!prereqsMet) return state;
 
-      // Check cost
+      // Check cost — ceil to match what TalentsScene displays
       const stats = computeStats(state.currentRun);
-      const cost = node.costEssence * stats.talentCostMultiplier;
+      const cost = Math.ceil(node.costEssence * stats.talentCostMultiplier);
       if (state.currentRun.resources.essence < cost) return state;
 
       trackEvent("talent_unlocked", {
@@ -654,9 +966,12 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
     case "CLAIM_DEATH": {
       if (!state.currentRun) return state;
-      // Can claim death if vitality <= 0 OR if run is manually ended
       const run = state.currentRun;
-      const ashEarned = computeLegacyAshReward(run);
+      if (run.alive) return state;
+      const evolutionCount = run.evolvedTraitIds.length;
+      const ashEarned = computeLegacyAshReward(run) +
+        evolutionCount * BALANCE.legacyAsh.evolutionBonus +
+        Math.floor((run.discoveryMomentum ?? 0) / 5) * BALANCE.legacyAsh.momentumBonus;
 
       // Discover traits on death
       const newDiscoveredTraits = new Set([
@@ -700,6 +1015,31 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       return reconcileOffline(state, event.nowUnixSec);
     }
 
+    case "CHOOSE_LEGACY_PATH": {
+      // Can only choose if no path has been set yet
+      if (state.meta.legacyPath !== null && state.meta.legacyPath !== undefined) return state;
+      return {
+        ...state,
+        meta: { ...state.meta, legacyPath: event.path },
+      };
+    }
+
+    case "PURCHASE_LEGACY_PERK": {
+      const legacyPath = state.meta.legacyPath ?? null;
+      if (!canPurchasePerk(event.perkId, legacyPath, state.meta.legacyPerks ?? [], state.meta.legacyAsh)) {
+        return state;
+      }
+      const perkDef = LEGACY_PERK_REGISTRY.get(event.perkId)!;
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          legacyAsh: state.meta.legacyAsh - perkDef.costAsh,
+          legacyPerks: [...(state.meta.legacyPerks ?? []), event.perkId],
+        },
+      };
+    }
+
     default:
       return state;
   }
@@ -716,6 +1056,7 @@ export function reconcileOffline(save: SaveFile, nowUnixSec: number): SaveFile {
 
   if (elapsed <= 0) return save;
 
+  const showWelcome = elapsed > 60; // Show if offline for > 1 minute
   const simulatedNow = save.updatedAtUnixSec + elapsed;
   let current = save;
 
@@ -737,5 +1078,6 @@ export function reconcileOffline(save: SaveFile, nowUnixSec: number): SaveFile {
     current = reduceGame(current, { type: "TICK", nowUnixSec: simulatedNow });
   }
 
-  return { ...current, updatedAtUnixSec: nowUnixSec };
+  return { ...current, updatedAtUnixSec: nowUnixSec, showWelcomeBack: showWelcome };
 }
+

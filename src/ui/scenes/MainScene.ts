@@ -1,9 +1,9 @@
 import { BaseScene } from "./BaseScene";
 import { COLORS, FONTS, LAYOUT } from "../theme";
-import { DUNGEON_REGISTRY } from "../../content/dungeons";
+import { DUNGEONS, DUNGEON_REGISTRY } from "../../content/dungeons";
 import { JOB_REGISTRY } from "../../content/jobs";
 import { TRAIT_REGISTRY } from "../../content/traits";
-import type { RunState } from "../../core/types";
+import type { RunState, RunLogKind } from "../../core/types";
 import { buildCharacterSvg } from "../avatar/buildCharacterSvg";
 import {
   buildCharacterVisualInputFromRun,
@@ -122,14 +122,20 @@ export class MainScene extends BaseScene {
       const def = TRAIT_REGISTRY.get(tid);
       if (!def) continue;
 
-      this.add.text(p + 10, y, `- ${def.name}`, {
+      const isEvolved = run.evolvedTraitIds.includes(tid);
+      const displayName = isEvolved && def.evolutionName ? def.evolutionName : def.name;
+      const displayDesc = isEvolved && def.evolutionDescription ? def.evolutionDescription : def.description;
+      const nameText = isEvolved ? `- ${displayName}  [+]` : `- ${displayName}`;
+      const nameColor = isEvolved ? COLORS.accent : COLORS.textPrimary;
+
+      this.add.text(p + 10, y, nameText, {
         fontFamily: FONTS.body,
         fontSize: "12px",
-        color: COLORS.textPrimary,
+        color: nameColor,
         wordWrap: { width: LAYOUT.cardWidth - 20 },
       });
       y += 16;
-      this.add.text(p + 18, y, def.description, {
+      this.add.text(p + 18, y, displayDesc, {
         fontFamily: FONTS.body,
         fontSize: "11px",
         color: COLORS.textMuted,
@@ -146,10 +152,40 @@ export class MainScene extends BaseScene {
       });
       y += 16;
     }
+
+    // Discovery momentum
+    if (run.discoveryMomentum > 0) {
+      const threshold = 5;
+      const pct = Math.floor(((run.discoveryMomentum % threshold) / threshold) * 100);
+      this.add.text(p + 10, y, `Discovery: ${pct}% to next reveal`, {
+        fontFamily: FONTS.body,
+        fontSize: "11px",
+        color: COLORS.textMuted,
+      });
+      y += 16;
+    }
+
+    // Legacy path badge
+    if (run.legacyPath) {
+      const pathLabel = run.legacyPath.charAt(0).toUpperCase() + run.legacyPath.slice(1);
+      this.add.text(p + 10, y, `Path: ${pathLabel}`, {
+        fontFamily: FONTS.body,
+        fontSize: "11px",
+        color: COLORS.textSecondary,
+      });
+      y += 16;
+    }
+
     y += 10;
 
     this.drawSectionRule(y - 4);
     y = this.drawActivitySection(run, y + 8);
+
+    if (run.runLog?.length) {
+      y += 8;
+      this.drawSectionRule(y - 4);
+      y = this.drawRunLog(run, y + 8);
+    }
 
     this.drawResourceChips(run, Math.min(y + 8, HOME_BOTTOM - 30));
   }
@@ -248,7 +284,14 @@ export class MainScene extends BaseScene {
       return y;
     }
 
-    const chapel = DUNGEON_REGISTRY.get("abandoned_chapel");
+    const unlockedDungeons = DUNGEONS.filter((dungeon) =>
+      this.saveFile.meta.unlockedDungeonIds.includes(dungeon.id)
+    );
+    const latestUnlockedDungeon = this.pickLatestDungeon(unlockedDungeons);
+    const latestEnterableDungeon = this.pickLatestDungeon(
+      unlockedDungeons.filter((dungeon) => run.resources.gold >= dungeon.goldCost)
+    );
+
     if (!job && this.saveFile.meta.unlockedJobIds.includes("porter")) {
       this.add.text(p + 10, y, "Next: work as Porter to earn dungeon gold.", {
         fontFamily: FONTS.body,
@@ -263,33 +306,41 @@ export class MainScene extends BaseScene {
       return y + 58;
     }
 
-    if (
-      chapel &&
-      this.saveFile.meta.unlockedDungeonIds.includes(chapel.id) &&
-      run.resources.gold >= chapel.goldCost
-    ) {
-      this.add.text(p + 10, y, "Ready: the chapel can be entered now.", {
+    if (latestEnterableDungeon) {
+      this.add.text(p + 10, y, `Ready: ${latestEnterableDungeon.name} is available now.`, {
         fontFamily: FONTS.body,
         fontSize: "12px",
         color: COLORS.textMuted,
         wordWrap: { width: LAYOUT.cardWidth - 20 },
       });
-      this.drawTextButton(LAYOUT.width - p - 8, y + 34, "[ Enter Chapel ]", () => {
-        this.dispatch({
-          type: "START_DUNGEON",
-          dungeonId: chapel.id,
-          nowUnixSec: this.nowUnixSec,
-        });
-        this.refresh();
+      this.drawTextButton(
+        LAYOUT.width - p - 8,
+        y + 34,
+        `[ Enter ${latestEnterableDungeon.name} ]`,
+        () => {
+          this.dispatch({
+            type: "START_DUNGEON",
+            dungeonId: latestEnterableDungeon.id,
+            nowUnixSec: this.nowUnixSec,
+          });
+          this.refresh();
+        }
+      );
+      this.drawTextButton(LAYOUT.width - p - 8, y + 60, "[ Open Delves ]", () => {
+        this.showTab("DungeonsScene");
       });
-      return y + 58;
+      return y + 84;
     }
 
-    const neededGold = chapel ? Math.max(0, chapel.goldCost - run.resources.gold) : 0;
+    const neededGold = latestUnlockedDungeon
+      ? Math.max(0, latestUnlockedDungeon.goldCost - run.resources.gold)
+      : 0;
     this.add.text(
       p + 10,
       y,
-      neededGold > 0 ? `Next: earn ${Math.ceil(neededGold)}g for the chapel.` : "Next: choose a delve.",
+      latestUnlockedDungeon
+        ? `Next: earn ${Math.ceil(neededGold)}g for ${latestUnlockedDungeon.name}.`
+        : "Next: choose a delve.",
       {
         fontFamily: FONTS.body,
         fontSize: "12px",
@@ -298,7 +349,55 @@ export class MainScene extends BaseScene {
       }
     );
 
-    return y + 30;
+    this.drawTextButton(LAYOUT.width - p - 8, y + 34, "[ Open Delves ]", () => {
+      this.showTab("DungeonsScene");
+    });
+
+    return y + 58;
+  }
+
+  private pickLatestDungeon<T extends { depthIndex: number }>(dungeons: T[]): T | null {
+    if (!dungeons.length) return null;
+    return dungeons.reduce((latest, dungeon) => {
+      return dungeon.depthIndex >= latest.depthIndex ? dungeon : latest;
+    });
+  }
+
+  private static readonly LOG_KIND_COLOR: Record<RunLogKind, string> = {
+    dungeon: "#9999bb",
+    trait_reveal: "#88ccaa",
+    trait_evolved: "#ffdd88",
+    legendary: "#ffaa44",
+    boss: "#ff7766",
+    milestone: "#aaddff",
+    death_warning: "#ff4444",
+    alignment: "#cc88ff",
+  };
+
+  private drawRunLog(run: RunState, y: number): number {
+    const p = LAYOUT.padding;
+    const log = run.runLog ?? [];
+    if (log.length === 0) return y;
+
+    this.add.text(p, y, "Recent Events", {
+      fontFamily: FONTS.body,
+      fontSize: "14px",
+      color: COLORS.textSecondary,
+    });
+    y += 20;
+
+    const entries = [...log].reverse().slice(0, 7);
+    for (const entry of entries) {
+      const color = MainScene.LOG_KIND_COLOR[entry.kind] ?? COLORS.textMuted;
+      this.add.text(p + 10, y, entry.message, {
+        fontFamily: FONTS.body,
+        fontSize: "11px",
+        color,
+        wordWrap: { width: LAYOUT.cardWidth - 20 },
+      });
+      y += 16;
+    }
+    return y + 4;
   }
 
   private drawResourceChips(run: RunState, y: number): void {

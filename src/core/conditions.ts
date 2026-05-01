@@ -57,6 +57,15 @@ export function evaluateCondition(
     case "ageSecondsAtLeast":
       return run.lifespan.ageSeconds >= condition.value;
 
+    case "traitEvolved":
+      return run.evolvedTraitIds.includes(condition.traitId);
+
+    case "legacyPathIs":
+      return run.legacyPath === condition.path;
+
+    case "discoveryMomentumAtLeast":
+      return run.discoveryMomentum >= condition.value;
+
     default:
       return true;
   }

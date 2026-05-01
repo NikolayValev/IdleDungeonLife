@@ -59,7 +59,10 @@ export type Condition =
   | { type: "dungeonHasTag"; tag: Tag }
   | { type: "equippedItemHasTag"; tag: Tag }
   | { type: "biologicalStageIs"; stage: BiologicalStage }
-  | { type: "ageSecondsAtLeast"; value: number };
+  | { type: "ageSecondsAtLeast"; value: number }
+  | { type: "traitEvolved"; traitId: string }
+  | { type: "legacyPathIs"; path: "holy" | "abyss" | "knowledge" }
+  | { type: "discoveryMomentumAtLeast"; value: number };
 
 // ─── Unlock Requirements ──────────────────────────────────────────────────────
 
@@ -67,6 +70,25 @@ export interface UnlockRequirement {
   legacyAsh?: number;
   dungeonCleared?: string;
   traitDiscovered?: string;
+  legacyPathChosen?: boolean; // requires any legacy path to have been chosen
+}
+
+// ─── Run Log ─────────────────────────────────────────────────────────────────
+
+export type RunLogKind =
+  | "dungeon"
+  | "trait_reveal"
+  | "trait_evolved"
+  | "legendary"
+  | "boss"
+  | "milestone"
+  | "death_warning"
+  | "alignment";
+
+export interface RunLogEntry {
+  kind: RunLogKind;
+  message: string;
+  timestampSec: number;
 }
 
 // ─── Core State Interfaces ───────────────────────────────────────────────────
@@ -118,6 +140,10 @@ export interface RunState {
   lifespan: LifespanState;
   visibleTraitIds: string[];
   hiddenTraitIds: string[];
+  evolvedTraitIds: string[];        // trait IDs that have reached their evolved stage
+  discoveryMomentum: number;        // accumulates from dungeon clears + discoveryRate; drives momentum reveals
+  activeLegacyPerkIds: string[];    // snapshot of meta.legacyPerks at run start
+  legacyPath: "holy" | "abyss" | "knowledge" | null; // snapshot of meta.legacyPath at run start
   inventory: InventoryState;
   equipment: EquipmentState;
   talents: TalentState;
@@ -128,6 +154,7 @@ export interface RunState {
   deepestDungeonIndex: number;
   totalDungeonsCompleted: number;
   bossesCleared: string[];
+  runLog: RunLogEntry[];
 }
 
 export interface MetaProgress {
@@ -138,6 +165,8 @@ export interface MetaProgress {
   codexEntries: string[];
   legacyAsh: number;
   totalRuns: number;
+  legacyPath: "holy" | "abyss" | "knowledge" | null; // chosen once per save, shapes prestige perks
+  legacyPerks: string[]; // IDs of purchased permanent perks
 }
 
 export interface SaveFile {
@@ -145,6 +174,7 @@ export interface SaveFile {
   updatedAtUnixSec: number;
   meta: MetaProgress;
   currentRun: RunState | null;
+  showWelcomeBack?: boolean; // transient: set by reconcileOffline, cleared after display
 }
 
 // ─── Computed Stats ───────────────────────────────────────────────────────────

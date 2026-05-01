@@ -6,12 +6,13 @@ import { computeStats } from "../../core/modifiers";
 const P = LAYOUT.padding;
 const TALENTS_PER_PAGE = 5;
 let currentTalentPage = 0;
-type TalentBranchFilter = "all" | "core" | "holy" | "abyss";
+type TalentBranchFilter = "all" | "core" | "holy" | "abyss" | "know";
 let talentBranchFilter: TalentBranchFilter = "all";
 
 function matchesBranch(nodeId: string): TalentBranchFilter {
   if (nodeId.startsWith("holy")) return "holy";
   if (nodeId.startsWith("abyss")) return "abyss";
+  if (nodeId.startsWith("know")) return "know";
   return "core";
 }
 
@@ -54,10 +55,11 @@ export class TalentsScene extends BaseScene {
       { id: "core", label: "[ Core ]" },
       { id: "holy", label: "[ Holy ]" },
       { id: "abyss", label: "[ Abyss ]" },
+      { id: "know", label: "[ Know ]" },
     ];
 
     filters.forEach((filter, index) => {
-      const button = this.add.text(P + index * 84, y, filter.label, {
+      const button = this.add.text(P + index * 72, y, filter.label, {
         fontFamily: FONTS.body,
         fontSize: "12px",
         color: talentBranchFilter === filter.id ? COLORS.accent : COLORS.textSecondary,
@@ -136,7 +138,7 @@ export class TalentsScene extends BaseScene {
         wordWrap: { width: LAYOUT.cardWidth - 90 },
       });
 
-      const costLabel = isUnlocked ? "✓" : `${cost}e`;
+      const costLabel = isUnlocked ? "[done]" : `${cost}e`;
       const costColor = isUnlocked
         ? COLORS.vitalityHigh
         : canAfford && prereqsMet

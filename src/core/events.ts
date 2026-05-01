@@ -18,4 +18,6 @@ export type GameEvent =
   | { type: "DEBUG_GRANT_ITEM"; itemId: string }
   | { type: "DEBUG_KILL_RUN" }
   | { type: "CLAIM_DEATH"; nowUnixSec: number }
-  | { type: "RECONCILE_OFFLINE"; nowUnixSec: number };
+  | { type: "RECONCILE_OFFLINE"; nowUnixSec: number }
+  | { type: "CHOOSE_LEGACY_PATH"; path: "holy" | "abyss" | "knowledge" }
+  | { type: "PURCHASE_LEGACY_PERK"; perkId: string };

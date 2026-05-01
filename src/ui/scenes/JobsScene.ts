@@ -37,9 +37,12 @@ export class JobsScene extends BaseScene {
 
       if (isUnlocked) {
         const stats = run ? computeStats(run) : null;
-        const mult = stats?.jobOutputMultiplier ?? 1;
-        const goldRate = (job.baseGoldPerSec * mult).toFixed(2);
-        const essRate = ((job.baseEssencePerSec ?? 0) * mult).toFixed(2);
+        const goldMultiplier =
+          (stats?.jobOutputMultiplier ?? 1) * (stats?.goldRate ?? 1);
+        const essenceMultiplier =
+          (stats?.jobOutputMultiplier ?? 1) * (stats?.essenceRate ?? 1);
+        const goldRate = (job.baseGoldPerSec * goldMultiplier).toFixed(2);
+        const essRate = ((job.baseEssencePerSec ?? 0) * essenceMultiplier).toFixed(2);
 
         this.add.text(P + 8, y + 28, job.description, {
           fontFamily: FONTS.body,

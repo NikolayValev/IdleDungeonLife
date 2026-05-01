@@ -1,0 +1,10 @@
+- [ ] Make live stat consumers match authored content and sim assumptions.
+- [x] Apply active job modifiers in `computeStats`.
+- [x] Make `goldRate` and `essenceRate` affect live income and dungeon rewards.
+- [x] Make holy/unholy affinity affect dungeon performance in matching delves.
+- [x] Make `discoveryRate` affect live progression/discovery outcomes.
+- [x] Implement hidden-trait reveal triggers for `alignmentThreshold` and `ageReached`.
+- [x] Prevent `CLAIM_DEATH` on living runs and stop batch sim from depending on it.
+- [x] Replace HUD-driven full scene restarts with targeted content refreshes.
+- [x] Unify talent cost rounding between UI and reducer.
+- [x] Clean up remaining mojibake / text-encoding issues in UI strings.

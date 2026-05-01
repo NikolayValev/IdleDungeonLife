@@ -45,6 +45,20 @@ export const JOBS: JobDef[] = [
       { stat: "discoveryRate", op: "mul", value: 1.12, source: "job_scribe" },
     ],
   },
+  {
+    id: "runecarver",
+    name: "Runecarver",
+    description: "Inscribe ritual glyphs for the deep guilds. The work demands focus; the pay reflects that.",
+    tags: ["knowledge", "relic"],
+    unlockRequirement: { legacyAsh: BALANCE.unlockCost.runecarver, traitDiscovered: "obsessive" },
+    baseGoldPerSec: BALANCE.jobRates.runecarver.goldPerSec,
+    baseEssencePerSec: BALANCE.jobRates.runecarver.essencePerSec,
+    modifiers: [
+      { stat: "discoveryRate", op: "mul", value: 1.28, source: "job_runecarver" },
+      { stat: "essenceRate", op: "mul", value: 1.12, source: "job_runecarver" },
+      { stat: "talentCostMultiplier", op: "mul", value: 0.94, source: "job_runecarver" },
+    ],
+  },
 ];
 
 export const JOB_REGISTRY = new Map<string, JobDef>(

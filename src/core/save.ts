@@ -8,7 +8,7 @@ import type {
 } from "./types";
 
 const SAVE_KEY = "idledungeonlife_save";
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -70,6 +70,10 @@ function migrateInventoryItems(value: unknown): ItemInstance[] {
     }));
 }
 
+function validLegacyPath(value: unknown): "holy" | "abyss" | "knowledge" | null {
+  return value === "holy" || value === "abyss" || value === "knowledge" ? value : null;
+}
+
 function migrateActiveDungeon(value: unknown): ActiveDungeonState | null {
   if (value === null || value === undefined) return null;
   if (!isRecord(value)) return null;
@@ -114,6 +118,10 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
     },
     visibleTraitIds: uniqueStrings(value.visibleTraitIds),
     hiddenTraitIds: uniqueStrings(value.hiddenTraitIds),
+      evolvedTraitIds: uniqueStrings(value.evolvedTraitIds),
+      discoveryMomentum: nonNegativeNumber(value.discoveryMomentum, 0),
+      activeLegacyPerkIds: uniqueStrings(value.activeLegacyPerkIds),
+      legacyPath: validLegacyPath(value.legacyPath),
     inventory: {
       items: migrateInventoryItems(value.inventory.items),
     },
@@ -131,6 +139,7 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
     deepestDungeonIndex: finiteNumber(value.deepestDungeonIndex, -1),
     totalDungeonsCompleted: nonNegativeNumber(value.totalDungeonsCompleted, 0),
     bossesCleared: uniqueStrings(value.bossesCleared),
+    runLog: [],
   };
 }
 
@@ -146,6 +155,8 @@ export function freshSave(nowUnixSec: number): SaveFile {
       codexEntries: [],
       legacyAsh: 0,
       totalRuns: 0,
+      legacyPath: null,
+      legacyPerks: [],
     },
     currentRun: null,
   };
@@ -171,6 +182,8 @@ export function migrateSave(input: SaveFile): SaveFile {
       codexEntries: uniqueStrings(meta.codexEntries),
       legacyAsh: nonNegativeNumber(meta.legacyAsh, 0),
       totalRuns: nonNegativeNumber(meta.totalRuns, 0),
+      legacyPath: validLegacyPath(meta.legacyPath),
+      legacyPerks: uniqueStrings(meta.legacyPerks),
     },
     currentRun: migrateRun(input.currentRun, updatedAtUnixSec),
   };

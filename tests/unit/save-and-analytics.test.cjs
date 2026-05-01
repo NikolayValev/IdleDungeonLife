@@ -138,3 +138,46 @@ test("LocalArrayAnalyticsSink records deterministic sequence numbers", () => {
 test("freshSave always uses current save version", () => {
   assert.equal(freshSave(123).version, SAVE_VERSION);
 });
+
+test("v2-to-v3 migration adds legacyPath, legacyPerks defaults to meta", () => {
+  const v2Save = {
+    version: 2,
+    updatedAtUnixSec: 5000,
+    meta: {
+      unlockedDungeonIds: ["abandoned_chapel"],
+      unlockedJobIds: ["porter"],
+      discoveredTraitIds: ["grave_touched"],
+      discoveredItemIds: [],
+      codexEntries: ["trait:grave_touched"],
+      legacyAsh: 7,
+      totalRuns: 3,
+    },
+    currentRun: null,
+  };
+
+  const migrated = migrateSave(v2Save);
+
+  assert.equal(migrated.version, SAVE_VERSION);
+  assert.equal(migrated.meta.legacyPath, null);
+  assert.deepStrictEqual(migrated.meta.legacyPerks, []);
+  assert.equal(migrated.meta.legacyAsh, 7);
+  assert.deepStrictEqual(migrated.meta.discoveredTraitIds, ["grave_touched"]);
+});
+
+test("v2-to-v3 migration adds evolvedTraitIds, discoveryMomentum, activeLegacyPerkIds to run", () => {
+  const { startRun } = require("./helpers.cjs");
+  const existingSave = startRun(123, 1000);
+  // Simulate a v2 run (without the new fields)
+  const runWithoutNewFields = { ...existingSave.currentRun };
+  delete runWithoutNewFields.evolvedTraitIds;
+  delete runWithoutNewFields.discoveryMomentum;
+  delete runWithoutNewFields.activeLegacyPerkIds;
+  delete runWithoutNewFields.legacyPath;
+
+  const parsed = parseSave(JSON.stringify({ ...existingSave, version: 2, currentRun: runWithoutNewFields }));
+  assert.ok(parsed?.currentRun);
+  assert.deepStrictEqual(parsed.currentRun.evolvedTraitIds, []);
+  assert.equal(parsed.currentRun.discoveryMomentum, 0);
+  assert.deepStrictEqual(parsed.currentRun.activeLegacyPerkIds, []);
+  assert.equal(parsed.currentRun.legacyPath, null);
+});

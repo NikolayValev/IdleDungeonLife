@@ -10,11 +10,27 @@ const TABS = [
   { key: "CodexScene", label: "Codex" },
 ];
 
+const TOAST_KIND_COLOR: Record<string, string> = {
+  boss: COLORS.vitalityLow,
+  legendary: "#ffaa44",
+  trait_evolved: "#ffdd88",
+  milestone: "#aaddff",
+  death_warning: "#ff4444",
+};
+
+function colorNumber(hex: string): number {
+  return Phaser.Display.Color.HexStringToColor(hex).color;
+}
+
 /**
  * Persistent HUD overlay that shows tab bar and global resource readout.
  * Runs on top of other scenes.
  */
 export class HudScene extends BaseScene {
+  private lastSeenLogLength = 0;
+  private toastContainer: Phaser.GameObjects.Container | null = null;
+  private toastTimer: Phaser.Time.TimerEvent | null = null;
+  private welcomeBackShown = false;
 
   constructor() {
     super({ key: "HudScene" });
@@ -23,6 +39,12 @@ export class HudScene extends BaseScene {
   create(): void {
     this.drawTabBar();
     this.updateHud();
+
+    // Show welcome back toast once at startup if offline period was significant
+    if (this.saveFile.showWelcomeBack && !this.welcomeBackShown) {
+      this.showToast("Welcome back, wanderer.", COLORS.accentHoly);
+      this.welcomeBackShown = true;
+    }
 
     // Auto-refresh HUD every second
     this.time.addEvent({
@@ -47,6 +69,17 @@ export class HudScene extends BaseScene {
     // Check for death after all state transitions for this tick.
     if (run && !run.alive && !run.currentDungeon) {
       this.dispatchDeathIfNeeded();
+    }
+
+    // Toast for high-priority run log events
+    const newLog = this.saveFile.currentRun?.runLog ?? [];
+    const newEntries = newLog.slice(this.lastSeenLogLength);
+    this.lastSeenLogLength = newLog.length;
+    for (const entry of newEntries) {
+      if (entry.kind in TOAST_KIND_COLOR) {
+        this.showToast(entry.message, TOAST_KIND_COLOR[entry.kind]);
+        break;
+      }
     }
 
     this.updateHud();
@@ -99,6 +132,9 @@ export class HudScene extends BaseScene {
     (vitalText as any).__hudElement = true;
   }
 
+  // Only these scenes render time-dependent counters and need a per-tick redraw.
+  private static readonly TICK_REFRESH_SCENES = new Set(["MainScene", "DungeonsScene"]);
+
   private refreshActiveContentScenes(): void {
     const run = this.saveFile.currentRun;
     if (!run?.alive) return;
@@ -106,9 +142,45 @@ export class HudScene extends BaseScene {
     this.scene.manager.scenes
       .filter((scene) => {
         const key = scene.scene.key;
-        return scene.scene.isActive() && key !== "HudScene" && key !== "DeathScene";
+        return (
+          scene.scene.isActive() &&
+          HudScene.TICK_REFRESH_SCENES.has(key)
+        );
       })
       .forEach((scene) => scene.scene.restart());
+  }
+
+  private showToast(message: string, color: string): void {
+    if (this.toastContainer) {
+      this.toastContainer.destroy();
+      this.toastContainer = null;
+    }
+    if (this.toastTimer) {
+      this.toastTimer.remove();
+      this.toastTimer = null;
+    }
+
+    const toastY = LAYOUT.hudHeight + 2;
+    const toastW = LAYOUT.width - 16;
+    const toastH = 22;
+    const bg = this.add
+      .rectangle(LAYOUT.width / 2, toastY + toastH / 2, toastW, toastH, 0x1a1a2e, 0.95)
+      .setStrokeStyle(1, colorNumber(color), 0.8);
+    const text = this.add
+      .text(LAYOUT.width / 2, toastY + toastH / 2, message, {
+        fontFamily: FONTS.body,
+        fontSize: "11px",
+        color,
+        align: "center",
+      })
+      .setOrigin(0.5, 0.5);
+    this.toastContainer = this.add.container(0, 0, [bg, text]);
+
+    this.toastTimer = this.time.delayedCall(3000, () => {
+      this.toastContainer?.destroy();
+      this.toastContainer = null;
+      this.toastTimer = null;
+    });
   }
 
   private drawTabBar(): void {

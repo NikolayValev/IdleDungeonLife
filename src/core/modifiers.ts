@@ -4,6 +4,8 @@ import type { Tag } from "./types";
 import { TRAIT_REGISTRY } from "../content/traits";
 import { ITEM_REGISTRY } from "../content/items";
 import { TALENT_REGISTRY } from "../content/talents";
+import { JOB_REGISTRY } from "../content/jobs";
+import { LEGACY_PERK_REGISTRY } from "../content/legacyPerks";
 
 // ─── Base stat defaults ───────────────────────────────────────────────────────
 
@@ -11,7 +13,7 @@ export const BASE_STATS: ComputedStats = {
   power: 10,
   survivability: 10,
   goldRate: 1,
-  essenceRate: 0.1,
+  essenceRate: 1,
   legendaryDropRate: 0.02,
   holyAffinity: 0,
   unholyAffinity: 0,
@@ -129,6 +131,26 @@ export function collectRunModifiers(run: RunState): Modifier[] {
   for (const nodeId of run.talents.unlockedNodeIds) {
     const def = TALENT_REGISTRY.get(nodeId);
     if (def) mods.push(...def.modifiers);
+  }
+
+  // Active job
+  if (run.currentJobId) {
+    const job = JOB_REGISTRY.get(run.currentJobId);
+    if (job?.modifiers) {
+      mods.push(...job.modifiers);
+    }
+  }
+
+  // Trait evolution modifiers (stacked on top of base trait modifiers)
+  for (const tid of run.evolvedTraitIds) {
+    const def = TRAIT_REGISTRY.get(tid);
+    if (def?.evolutionModifiers) mods.push(...def.evolutionModifiers);
+  }
+
+  // Legacy perk modifiers (permanent prestige bonuses carried into this run)
+  for (const perkId of run.activeLegacyPerkIds) {
+    const def = LEGACY_PERK_REGISTRY.get(perkId);
+    if (def?.modifiers) mods.push(...def.modifiers);
   }
 
   return mods;
