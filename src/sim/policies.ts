@@ -8,7 +8,18 @@ import { ITEM_REGISTRY } from "../content/items";
 import { JOB_REGISTRY } from "../content/jobs";
 
 export type PolicyAction =
-  | Extract<GameEvent, { type: "ASSIGN_JOB" | "START_DUNGEON" | "EQUIP_ITEM" | "UNLOCK_TALENT" }>
+  | Extract<
+      GameEvent,
+      {
+        type:
+          | "ASSIGN_JOB"
+          | "START_DUNGEON"
+          | "EQUIP_ITEM"
+          | "UNLOCK_TALENT"
+          | "UNLOCK_JOB"
+          | "UNLOCK_DUNGEON";
+      }
+    >
   | null;
 
 export interface Policy {
@@ -138,6 +149,68 @@ function bestJobAction(save: SaveFile): PolicyAction {
   return { type: "ASSIGN_JOB", jobId: bestJob.jobId };
 }
 
+function meetsUnlockRequirement(save: SaveFile, requirement?: { dungeonCleared?: string; traitDiscovered?: string; legacyPathChosen?: boolean }): boolean {
+  if (!requirement) return true;
+  if (requirement.traitDiscovered && !save.meta.discoveredTraitIds.includes(requirement.traitDiscovered)) {
+    return false;
+  }
+  if (requirement.dungeonCleared) {
+    const run = save.currentRun;
+    if (!run || !run.bossesCleared.includes(requirement.dungeonCleared)) {
+      return false;
+    }
+  }
+  if (requirement.legacyPathChosen && !save.meta.legacyPath) {
+    return false;
+  }
+  return true;
+}
+
+function bestUnlockAction(save: SaveFile): PolicyAction {
+  const run = save.currentRun;
+  if (!run?.alive) return null;
+
+  const unlockableDungeons = DUNGEONS.filter((dungeon) => {
+    if (save.meta.unlockedDungeonIds.includes(dungeon.id)) return false;
+    const cost = dungeon.unlockRequirement?.legacyAsh ?? 0;
+    if (save.meta.legacyAsh < cost) return false;
+    return meetsUnlockRequirement(save, dungeon.unlockRequirement);
+  }).map((dungeon) => ({
+    dungeonId: dungeon.id,
+    score: dungeon.depthIndex * 100 - (dungeon.unlockRequirement?.legacyAsh ?? 0),
+  }));
+
+  const unlockableJobs = Array.from(JOB_REGISTRY.values())
+    .filter((job) => {
+      if (save.meta.unlockedJobIds.includes(job.id)) return false;
+      const cost = job.unlockRequirement?.legacyAsh ?? 0;
+      if (save.meta.legacyAsh < cost) return false;
+      return meetsUnlockRequirement(save, job.unlockRequirement);
+    })
+    .map((job) => ({
+      jobId: job.id,
+      score:
+        job.baseGoldPerSec * 80 +
+        (job.baseEssencePerSec ?? 0) * 220 -
+        (job.unlockRequirement?.legacyAsh ?? 0),
+    }));
+
+  unlockableDungeons.sort((a, b) => b.score - a.score);
+  unlockableJobs.sort((a, b) => b.score - a.score);
+
+  const bestDungeon = unlockableDungeons[0];
+  const bestJob = unlockableJobs[0];
+
+  if (!bestDungeon && !bestJob) return null;
+  if (bestDungeon && !bestJob) return { type: "UNLOCK_DUNGEON", dungeonId: bestDungeon.dungeonId };
+  if (bestJob && !bestDungeon) return { type: "UNLOCK_JOB", jobId: bestJob.jobId };
+
+  if ((bestDungeon?.score ?? -Infinity) >= (bestJob?.score ?? -Infinity)) {
+    return { type: "UNLOCK_DUNGEON", dungeonId: bestDungeon!.dungeonId };
+  }
+  return { type: "UNLOCK_JOB", jobId: bestJob!.jobId };
+}
+
 function bestDungeonAction(save: SaveFile, nowUnixSec: number): PolicyAction {
   const run = save.currentRun;
   if (!run?.alive || run.currentDungeon) return null;
@@ -172,10 +245,53 @@ export class BaselinePolicy implements Policy {
     if (!run?.alive) return null;
 
     return (
+      bestUnlockAction(save) ??
       bestJobAction(save) ??
       bestItemAction(save) ??
       bestTalentAction(save) ??
       bestDungeonAction(save, nowUnixSec)
+    );
+  }
+}
+
+/**
+ * Conservative policy: prioritizes survival over progression
+ * - Favors job income and equipment improvements
+ * - Avoids difficult dungeons, favors easy/medium dungeons
+ */
+export class ConservativePolicy implements Policy {
+  decide(save: SaveFile, nowUnixSec: number): PolicyAction {
+    const run = save.currentRun;
+    if (!run?.alive) return null;
+
+    // First priority: jobs and equipment for steady income and survivability
+    return (
+      bestUnlockAction(save) ??
+      bestJobAction(save) ??
+      bestItemAction(save) ??
+      bestTalentAction(save) ??
+      bestDungeonAction(save, nowUnixSec)
+    );
+  }
+}
+
+/**
+ * Aggressive policy: prioritizes depth and rewards
+ * - Favors high-difficulty dungeons for legendary drops
+ * - Pushes depth limits and risk/reward ratio
+ */
+export class AggressivePolicy implements Policy {
+  decide(save: SaveFile, nowUnixSec: number): PolicyAction {
+    const run = save.currentRun;
+    if (!run?.alive) return null;
+
+    // Reorder to push dungeons earlier, talents for legendary boost
+    return (
+      bestUnlockAction(save) ??
+      bestTalentAction(save) ??
+      bestDungeonAction(save, nowUnixSec) ??
+      bestJobAction(save) ??
+      bestItemAction(save)
     );
   }
 }

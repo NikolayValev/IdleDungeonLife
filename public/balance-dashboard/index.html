@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Balance Optimization Dashboard</title>
+  <style>
+    :root {
+      --bg: #08161a;
+      --panel: #10262d;
+      --panel-2: #15333d;
+      --text: #e5f7f7;
+      --muted: #98b9bd;
+      --accent: #37f6b8;
+      --accent-2: #00b3ff;
+      --danger: #ff7a7a;
+      --border: #1f4a55;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Trebuchet MS", "Verdana", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(55, 246, 184, 0.17), transparent 32%),
+        radial-gradient(circle at 85% 20%, rgba(0, 179, 255, 0.18), transparent 28%),
+        linear-gradient(145deg, #061116, #08161a 35%, #0a1b21 100%);
+      min-height: 100vh;
+    }
+
+    .layout {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.25rem;
+      display: grid;
+      grid-template-columns: 380px minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .panel {
+      background: linear-gradient(145deg, rgba(16, 38, 45, 0.95), rgba(21, 51, 61, 0.95));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100vh - 2.5rem);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(55, 246, 184, 0.12), rgba(0, 179, 255, 0.08));
+    }
+
+    .title {
+      margin: 0;
+      font-size: 1.3rem;
+      line-height: 1.2;
+      color: var(--accent);
+    }
+
+    .subtitle {
+      margin: 0.25rem 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .toolbar {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      gap: 0.6rem;
+    }
+
+    .toolbar-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .search {
+      width: 100%;
+      border: 1px solid #2a5a64;
+      border-radius: 8px;
+      background: #0b1f26;
+      color: var(--text);
+      padding: 0.55rem 0.65rem;
+      font-size: 0.92rem;
+      outline: none;
+    }
+
+    .search:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(55, 246, 184, 0.18);
+    }
+
+    .btn {
+      border: 1px solid #2a5a64;
+      background: #0d242c;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.45rem 0.65rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.18s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, rgba(55, 246, 184, 0.2), rgba(0, 179, 255, 0.2));
+      border-color: #3ccca2;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.82rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .report-list {
+      overflow: auto;
+      padding: 0.75rem;
+      display: grid;
+      gap: 0.5rem;
+      align-content: start;
+    }
+
+    .report-item {
+      border: 1px solid #24505b;
+      border-radius: 10px;
+      background: rgba(12, 33, 40, 0.88);
+      padding: 0.6rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .report-item:hover {
+      border-color: #38d6aa;
+      transform: translateX(2px);
+    }
+
+    .report-item.active {
+      border-color: var(--accent);
+      background: linear-gradient(90deg, rgba(55, 246, 184, 0.12), rgba(0, 179, 255, 0.06));
+    }
+
+    .report-name {
+      font-size: 0.86rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+      margin: 0;
+    }
+
+    .report-meta {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .viewer {
+      min-height: calc(100vh - 2.5rem);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .viewer-header {
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .viewer-title {
+      margin: 0;
+      font-size: 1rem;
+      overflow-wrap: anywhere;
+    }
+
+    .viewer-frame-wrap {
+      background: #081318;
+      padding: 0.8rem;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 1px solid #1f4a55;
+      border-radius: 10px;
+      background: #0e1c21;
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      height: 100%;
+      border: 1px dashed #2a5a64;
+      border-radius: 10px;
+      background: rgba(12, 33, 40, 0.6);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar,
+      .viewer {
+        min-height: auto;
+      }
+
+      .viewer {
+        min-height: 70vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="panel sidebar">
+      <div class="header">
+        <h1 class="title">Optimization Dashboard</h1>
+        <p class="subtitle">Balance reports endpoint: /api/balance-reports</p>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-row">
+          <input id="searchInput" class="search" type="text" placeholder="Filter reports by name..." />
+        </div>
+        <div class="toolbar-row">
+          <button id="refreshBtn" class="btn btn-primary" type="button">Refresh</button>
+          <button id="sortNameBtn" class="btn" type="button">Sort: Name</button>
+          <button id="sortDateBtn" class="btn" type="button">Sort: Recent</button>
+        </div>
+        <div class="meta">
+          <span id="reportCount">Reports: 0</span>
+          <span id="updatedAt">Updated: -</span>
+        </div>
+      </div>
+
+      <div id="reportList" class="report-list"></div>
+    </aside>
+
+    <section class="panel viewer">
+      <div class="viewer-header">
+        <h2 id="viewerTitle" class="viewer-title">Select a report to preview</h2>
+        <div class="toolbar-row">
+          <a id="openNewTab" class="btn" href="#" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+        </div>
+      </div>
+      <div class="viewer-frame-wrap">
+        <div id="emptyState" class="empty">No report selected yet.</div>
+        <iframe id="reportFrame" title="Balance Report Preview" style="display:none;"></iframe>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const reportList = document.getElementById("reportList");
+    const reportCount = document.getElementById("reportCount");
+    const updatedAt = document.getElementById("updatedAt");
+    const searchInput = document.getElementById("searchInput");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const sortNameBtn = document.getElementById("sortNameBtn");
+    const sortDateBtn = document.getElementById("sortDateBtn");
+    const viewerTitle = document.getElementById("viewerTitle");
+    const openNewTab = document.getElementById("openNewTab");
+    const reportFrame = document.getElementById("reportFrame");
+    const emptyState = document.getElementById("emptyState");
+
+    let reports = [];
+    let selectedUrl = "";
+    let sortMode = "recent";
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function applySort(items) {
+      const sorted = [...items];
+      if (sortMode === "name") {
+        sorted.sort((a, b) => a.fileName.localeCompare(b.fileName));
+      } else {
+        sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      }
+      return sorted;
+    }
+
+    function applyFilter(items) {
+      const query = searchInput.value.trim().toLowerCase();
+      if (!query) return items;
+      return items.filter((report) => report.fileName.toLowerCase().includes(query));
+    }
+
+    function renderList() {
+      const filtered = applyFilter(applySort(reports));
+      reportList.innerHTML = "";
+
+      if (filtered.length === 0) {
+        reportList.innerHTML = `<div class="empty">No reports match your filter.</div>`;
+        return;
+      }
+
+      for (const report of filtered) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = `report-item${selectedUrl === report.url ? " active" : ""}`;
+        item.innerHTML = `
+          <p class="report-name">${report.fileName}</p>
+          <p class="report-meta">
+            <span>${new Date(report.updatedAt).toLocaleString()}</span>
+            <span>${formatBytes(report.sizeBytes)}</span>
+          </p>
+        `;
+        item.addEventListener("click", () => selectReport(report));
+        reportList.appendChild(item);
+      }
+    }
+
+    function selectReport(report) {
+      selectedUrl = report.url;
+      viewerTitle.textContent = report.fileName;
+      openNewTab.href = report.url;
+      reportFrame.src = report.url;
+      reportFrame.style.display = "block";
+      emptyState.style.display = "none";
+      renderList();
+    }
+
+    async function loadReports() {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Refreshing...";
+
+      try {
+        const response = await fetch("/api/balance-reports", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Failed to load reports (${response.status})`);
+        }
+
+        const payload = await response.json();
+        reports = Array.isArray(payload.reports) ? payload.reports : [];
+        reportCount.textContent = `Reports: ${reports.length}`;
+        updatedAt.textContent = `Updated: ${new Date(payload.generatedAt).toLocaleTimeString()}`;
+
+        if (!selectedUrl && reports.length > 0) {
+          selectReport(applySort(reports)[0]);
+        } else {
+          renderList();
+        }
+      } catch (error) {
+        reportList.innerHTML = `<div class="empty" style="color: var(--danger);">${String(error)}</div>`;
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "Refresh";
+      }
+    }
+
+    refreshBtn.addEventListener("click", loadReports);
+    sortNameBtn.addEventListener("click", () => {
+      sortMode = "name";
+      renderList();
+    });
+    sortDateBtn.addEventListener("click", () => {
+      sortMode = "recent";
+      renderList();
+    });
+    searchInput.addEventListener("input", renderList);
+
+    loadReports();
+  </script>
+</body>
+</html>

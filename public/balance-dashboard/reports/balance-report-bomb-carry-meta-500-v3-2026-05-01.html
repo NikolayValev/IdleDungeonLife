@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balance Test Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e0e0e0;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid #0f9;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      color: #0f9;
+      text-shadow: 0 0 10px rgba(0, 255, 153, 0.3);
+    }
+    .timestamp {
+      color: #888;
+      font-size: 0.9rem;
+    }
+    .profiles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+    .profile-card {
+      background: linear-gradient(135deg, #0f3a3a 0%, #0a2a3a 100%);
+      border: 1px solid #0f9;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    }
+    .profile-card h2 {
+      color: #0f9;
+      margin-bottom: 1rem;
+      font-size: 1.5rem;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-box {
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 3px solid #0f9;
+      padding: 1rem;
+      border-radius: 4px;
+    }
+    .stat-label {
+      color: #888;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+    .stat-value {
+      color: #0f9;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .stat-unit {
+      color: #666;
+      font-size: 0.9rem;
+      margin-left: 0.5rem;
+    }
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-bottom: 1.5rem;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+      padding: 1rem;
+    }
+    .milestones {
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #0f9;
+    }
+    .milestones h3 {
+      color: #0f9;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+    .milestone-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #1a3a3a;
+    }
+    .milestone-name {
+      flex: 1;
+    }
+    .milestone-bar {
+      flex: 2;
+      height: 20px;
+      background: rgba(0, 255, 153, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 0 1rem;
+    }
+    .milestone-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0f9, #0f6);
+      transition: width 0.3s;
+    }
+    .milestone-stat {
+      width: 60px;
+      text-align: right;
+      font-size: 0.9rem;
+      color: #0f9;
+    }
+    .comparison-section {
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 2px solid #0f9;
+    }
+    .comparison-section h2 {
+      color: #0f9;
+      margin-bottom: 1.5rem;
+    }
+    .comparison-chart {
+      background: linear-gradient(135deg, #0f3a3a 0%, #0a2a3a 100%);
+      border: 1px solid #0f9;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .comparison-chart h3 {
+      color: #0f9;
+      margin-bottom: 1rem;
+    }
+    .chart-wrapper {
+      position: relative;
+      height: 400px;
+    }
+    footer {
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid #0f9;
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚔️ Balance Test Report</h1>
+      <p class="timestamp">Generated: 2026-05-01T22:25:14.913Z</p>
+    </div>
+
+    <div class="profiles-grid">
+      
+    <div class="profile-card">
+      <h2>Baseline</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Avg Depth</div>
+          <div class="stat-value">5.3</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Survival Time</div>
+          <div class="stat-value">15</div>
+          <span class="stat-unit">min</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Dungeons Cleared</div>
+          <div class="stat-value">7.1</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Discoveries</div>
+          <div class="stat-value">75.1</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Completed Runs</div>
+          <div class="stat-value">500</div>
+          <span class="stat-unit">/ 500</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg Legacy Ash</div>
+          <div class="stat-value">13473</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="depth-chart-baseline"></canvas>
+      </div>
+
+      
+        <div class="milestones">
+          <h3>Milestones</h3>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_10</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0.8%"></div>
+              </div>
+              <div class="milestone-stat">1%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_15</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0%"></div>
+              </div>
+              <div class="milestone-stat">0%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">boss_defeated</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 12.4%"></div>
+              </div>
+              <div class="milestone-stat">12%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">legendary_found</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 34.4%"></div>
+              </div>
+              <div class="milestone-stat">34%</div>
+            </div>
+          
+        </div>
+      
+    </div>
+  
+    <div class="profile-card">
+      <h2>Conservative</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Avg Depth</div>
+          <div class="stat-value">5.6</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Survival Time</div>
+          <div class="stat-value">15</div>
+          <span class="stat-unit">min</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Dungeons Cleared</div>
+          <div class="stat-value">6.9</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Discoveries</div>
+          <div class="stat-value">76.3</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Completed Runs</div>
+          <div class="stat-value">500</div>
+          <span class="stat-unit">/ 500</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg Legacy Ash</div>
+          <div class="stat-value">14286</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="depth-chart-conservative"></canvas>
+      </div>
+
+      
+        <div class="milestones">
+          <h3>Milestones</h3>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_5</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 54.400000000000006%"></div>
+              </div>
+              <div class="milestone-stat">54%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_10</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0.8%"></div>
+              </div>
+              <div class="milestone-stat">1%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">legendary_found</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 34%"></div>
+              </div>
+              <div class="milestone-stat">34%</div>
+            </div>
+          
+        </div>
+      
+    </div>
+  
+    <div class="profile-card">
+      <h2>Aggressive</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Avg Depth</div>
+          <div class="stat-value">6.0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Survival Time</div>
+          <div class="stat-value">14</div>
+          <span class="stat-unit">min</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Dungeons Cleared</div>
+          <div class="stat-value">6.5</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Discoveries</div>
+          <div class="stat-value">72.3</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Completed Runs</div>
+          <div class="stat-value">500</div>
+          <span class="stat-unit">/ 500</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg Legacy Ash</div>
+          <div class="stat-value">15055</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="depth-chart-aggressive"></canvas>
+      </div>
+
+      
+        <div class="milestones">
+          <h3>Milestones</h3>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_12</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0%"></div>
+              </div>
+              <div class="milestone-stat">0%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_15</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0%"></div>
+              </div>
+              <div class="milestone-stat">0%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">boss_defeated</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 30.8%"></div>
+              </div>
+              <div class="milestone-stat">31%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">legendary_found</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 29.599999999999998%"></div>
+              </div>
+              <div class="milestone-stat">30%</div>
+            </div>
+          
+        </div>
+      
+    </div>
+  
+    <div class="profile-card">
+      <h2>Long Run</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Avg Depth</div>
+          <div class="stat-value">5.5</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Survival Time</div>
+          <div class="stat-value">15</div>
+          <span class="stat-unit">min</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Dungeons Cleared</div>
+          <div class="stat-value">7.0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Discoveries</div>
+          <div class="stat-value">76.0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Completed Runs</div>
+          <div class="stat-value">500</div>
+          <span class="stat-unit">/ 500</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg Legacy Ash</div>
+          <div class="stat-value">13807</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="depth-chart-long-run"></canvas>
+      </div>
+
+      
+        <div class="milestones">
+          <h3>Milestones</h3>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_15</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0%"></div>
+              </div>
+              <div class="milestone-stat">0%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">legendary_found</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 34.2%"></div>
+              </div>
+              <div class="milestone-stat">34%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">trait_evolved</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 45.800000000000004%"></div>
+              </div>
+              <div class="milestone-stat">46%</div>
+            </div>
+          
+        </div>
+      
+    </div>
+  
+    <div class="profile-card">
+      <h2>Speedrun</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Avg Depth</div>
+          <div class="stat-value">5.3</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Survival Time</div>
+          <div class="stat-value">15</div>
+          <span class="stat-unit">min</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Dungeons Cleared</div>
+          <div class="stat-value">7.2</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Discoveries</div>
+          <div class="stat-value">77.7</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Completed Runs</div>
+          <div class="stat-value">500</div>
+          <span class="stat-unit">/ 500</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg Legacy Ash</div>
+          <div class="stat-value">13598</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="depth-chart-speedrun"></canvas>
+      </div>
+
+      
+        <div class="milestones">
+          <h3>Milestones</h3>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_5</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 50.2%"></div>
+              </div>
+              <div class="milestone-stat">50%</div>
+            </div>
+          
+            <div class="milestone-item">
+              <div class="milestone-name">depth_10</div>
+              <div class="milestone-bar">
+                <div class="milestone-fill" style="width: 0.2%"></div>
+              </div>
+              <div class="milestone-stat">0%</div>
+            </div>
+          
+        </div>
+      
+    </div>
+  
+    </div>
+
+    
+    <div class="comparison-section">
+      <h2>📊 Profile Comparison</h2>
+
+      <div class="comparison-chart">
+        <h3>Average Depth by Profile</h3>
+        <div class="chart-wrapper">
+          <canvas id="comparison-depth"></canvas>
+        </div>
+      </div>
+
+      <div class="comparison-chart">
+        <h3>Average Survival Time by Profile</h3>
+        <div class="chart-wrapper">
+          <canvas id="comparison-survival"></canvas>
+        </div>
+      </div>
+
+      <div class="comparison-chart">
+        <h3>Discoveries by Profile</h3>
+        <div class="chart-wrapper">
+          <canvas id="comparison-discoveries"></canvas>
+        </div>
+      </div>
+    </div>
+  
+
+    <footer>
+      <p>Idle Dungeon Life - Balance Test Report</p>
+      <p>Runs: 2500 | Profiles: 5</p>
+    </footer>
+  </div>
+
+  <script>
+    
+    const chartColor = (index) => {
+      const colors = ['#0f9', '#0f6', '#06f', '#f60', '#f0f', '#ff0'];
+      return colors[index % colors.length];
+    };
+
+    // Profile depth distribution charts
+    
+      (function() {
+        const ctx = document.getElementById('depth-chart-baseline');
+        if (ctx) {
+          new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: ["100-199","400-499","300-399","500-599","600-699","700-799","800-899","900-999"],
+              datasets: [{
+                label: 'Runs',
+                data: [1,2,1,40,257,137,59,3],
+                backgroundColor: chartColor(0),
+                borderColor: chartColor(0),
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+                x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+              }
+            }
+          });
+        }
+      })();
+    
+      (function() {
+        const ctx = document.getElementById('depth-chart-conservative');
+        if (ctx) {
+          new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: ["100-199","400-499","500-599","600-699","700-799","800-899","900-999"],
+              datasets: [{
+                label: 'Runs',
+                data: [1,2,9,263,154,66,5],
+                backgroundColor: chartColor(1),
+                borderColor: chartColor(1),
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+                x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+              }
+            }
+          });
+        }
+      })();
+    
+      (function() {
+        const ctx = document.getElementById('depth-chart-aggressive');
+        if (ctx) {
+          new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: ["100-199","400-499","500-599","600-699","700-799","800-899","900-999"],
+              datasets: [{
+                label: 'Runs',
+                data: [1,3,24,259,135,76,2],
+                backgroundColor: chartColor(2),
+                borderColor: chartColor(2),
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+                x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+              }
+            }
+          });
+        }
+      })();
+    
+      (function() {
+        const ctx = document.getElementById('depth-chart-long-run');
+        if (ctx) {
+          new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: ["100-199","400-499","300-399","500-599","600-699","700-799","800-899","900-999"],
+              datasets: [{
+                label: 'Runs',
+                data: [1,7,1,22,250,150,64,5],
+                backgroundColor: chartColor(3),
+                borderColor: chartColor(3),
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+                x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+              }
+            }
+          });
+        }
+      })();
+    
+      (function() {
+        const ctx = document.getElementById('depth-chart-speedrun');
+        if (ctx) {
+          new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: ["100-199","400-499","500-599","300-399","600-699","700-799","800-899","900-999"],
+              datasets: [{
+                label: 'Runs',
+                data: [1,2,6,1,259,164,66,1],
+                backgroundColor: chartColor(4),
+                borderColor: chartColor(4),
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+                x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+              }
+            }
+          });
+        }
+      })();
+    
+
+    // Comparison charts (if multiple profiles)
+    if (5 > 1) {
+      const profileNames = ["Baseline","Conservative","Aggressive","Long Run","Speedrun"];
+      const depths = [5.324,5.606,5.992,5.466,5.292];
+      const survivalTimes = [14.644666666666666,14.558666666666666,14.2895,14.519166666666667,14.724333333333334];
+      const discoveries = [75.09,76.276,72.294,75.952,77.69];
+
+      // Depth comparison
+      const depthCtx = document.getElementById('comparison-depth');
+      if (depthCtx) {
+        new Chart(depthCtx, {
+          type: 'bar',
+          data: {
+            labels: profileNames,
+            datasets: [{
+              label: 'Average Depth',
+              data: depths,
+              backgroundColor: '#0f9',
+              borderColor: '#0f6',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#888' } } },
+            scales: {
+              y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+              x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+            }
+          }
+        });
+      }
+
+      // Survival time comparison
+      const survivalCtx = document.getElementById('comparison-survival');
+      if (survivalCtx) {
+        new Chart(survivalCtx, {
+          type: 'line',
+          data: {
+            labels: profileNames,
+            datasets: [{
+              label: 'Avg Survival (min)',
+              data: survivalTimes,
+              borderColor: '#0f6',
+              backgroundColor: 'rgba(0, 255, 102, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#888' } } },
+            scales: {
+              y: { beginAtZero: true, ticks: { color: '#888' }, grid: { color: '#1a3a3a' } },
+              x: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+            }
+          }
+        });
+      }
+
+      // Discoveries comparison
+      const discoveriesCtx = document.getElementById('comparison-discoveries');
+      if (discoveriesCtx) {
+        new Chart(discoveriesCtx, {
+          type: 'radar',
+          data: {
+            labels: profileNames,
+            datasets: [{
+              label: 'Avg Discoveries',
+              data: discoveries,
+              borderColor: '#06f',
+              backgroundColor: 'rgba(0, 102, 255, 0.2)',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#888' } } },
+            scales: {
+              r: { ticks: { color: '#888' }, grid: { color: '#1a3a3a' } }
+            }
+          }
+        });
+      }
+    }
+  
+  </script>
+</body>
+</html>

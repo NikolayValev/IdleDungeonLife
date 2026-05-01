@@ -48,6 +48,10 @@ export class LocalArrayAnalyticsSink implements AnalyticsSink {
 
 let _sink: AnalyticsSink = new ConsoleAnalyticsSink();
 
+export function getAnalyticsSink(): AnalyticsSink {
+  return _sink;
+}
+
 export function setAnalyticsSink(sink: AnalyticsSink): void {
   _sink = sink;
 }
