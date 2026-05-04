@@ -174,7 +174,56 @@ export interface SaveFile {
   updatedAtUnixSec: number;
   meta: MetaProgress;
   currentRun: RunState | null;
+  playthroughArchive: PlaythroughArchive;
   showWelcomeBack?: boolean; // transient: set by reconcileOffline, cleared after display
+}
+
+export interface PlaythroughTimelineEvent {
+  name: string;
+  payload: Record<string, unknown>;
+  seq: number;
+}
+
+export interface PlaythroughScoreSummary {
+  total: number;
+  dungeonDepthScore: number;
+  legacyAshScore: number;
+  survivalScore: number;
+  discoveryScore: number;
+  buildDiversityScore: number;
+  dominancePenalty: number;
+}
+
+export interface PlaythroughLegacyAsh {
+  earned: number;
+  baseBreakdown: {
+    total: number;
+    depthBonus: number;
+    ageBonus: number;
+    bossBonus: number;
+    dungeonBonus: number;
+  };
+  evolutionBonus: number;
+  momentumBonus: number;
+}
+
+export interface PlaythroughRecord {
+  id: string;
+  recordVersion: number;
+  recordedAtUnixSec: number;
+  seed: number;
+  outcome: "death" | "abandoned";
+  finalRun: RunState;
+  finalMeta: MetaProgress;
+  finalScore: PlaythroughScoreSummary;
+  legacyAsh: PlaythroughLegacyAsh;
+  timeline: PlaythroughTimelineEvent[];
+}
+
+export interface PlaythroughArchive {
+  version: number;
+  maxRecords: number;
+  records: PlaythroughRecord[];
 }
 
 // ─── Computed Stats ───────────────────────────────────────────────────────────

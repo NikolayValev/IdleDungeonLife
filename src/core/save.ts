@@ -3,12 +3,20 @@ import type {
   BiologicalStage,
   EquipmentState,
   ItemInstance,
+  MetaProgress,
+  PlaythroughArchive,
+  PlaythroughLegacyAsh,
+  PlaythroughRecord,
+  PlaythroughScoreSummary,
+  PlaythroughTimelineEvent,
   RunState,
   SaveFile,
 } from "./types";
 
 const SAVE_KEY = "idledungeonlife_save";
 export const SAVE_VERSION = 3;
+export const PLAYTHROUGH_ARCHIVE_VERSION = 1;
+export const PLAYTHROUGH_ARCHIVE_MAX_RECORDS = 100;
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -72,6 +80,134 @@ function migrateInventoryItems(value: unknown): ItemInstance[] {
 
 function validLegacyPath(value: unknown): "holy" | "abyss" | "knowledge" | null {
   return value === "holy" || value === "abyss" || value === "knowledge" ? value : null;
+}
+
+function emptyPlaythroughArchive(maxRecords = PLAYTHROUGH_ARCHIVE_MAX_RECORDS): PlaythroughArchive {
+  return {
+    version: PLAYTHROUGH_ARCHIVE_VERSION,
+    maxRecords,
+    records: [],
+  };
+}
+
+function migrateMeta(value: unknown, fallback: MetaProgress): MetaProgress {
+  const meta = isRecord(value) ? value : {};
+
+  return {
+    unlockedDungeonIds: hasStringArray(meta.unlockedDungeonIds)
+      ? uniqueStrings(meta.unlockedDungeonIds)
+      : fallback.unlockedDungeonIds,
+    unlockedJobIds: hasStringArray(meta.unlockedJobIds)
+      ? uniqueStrings(meta.unlockedJobIds)
+      : fallback.unlockedJobIds,
+    discoveredTraitIds: uniqueStrings(meta.discoveredTraitIds),
+    discoveredItemIds: uniqueStrings(meta.discoveredItemIds),
+    codexEntries: uniqueStrings(meta.codexEntries),
+    legacyAsh: nonNegativeNumber(meta.legacyAsh, 0),
+    totalRuns: nonNegativeNumber(meta.totalRuns, 0),
+    legacyPath: validLegacyPath(meta.legacyPath),
+    legacyPerks: uniqueStrings(meta.legacyPerks),
+  };
+}
+
+function migrateTimelineEvent(value: unknown): PlaythroughTimelineEvent | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.name !== "string") return null;
+  if (!isRecord(value.payload)) return null;
+
+  return {
+    name: value.name,
+    payload: value.payload,
+    seq: Math.max(0, Math.floor(finiteNumber(value.seq, 0))),
+  };
+}
+
+function migrateScoreSummary(value: unknown): PlaythroughScoreSummary {
+  const raw = isRecord(value) ? value : {};
+
+  return {
+    total: finiteNumber(raw.total, 0),
+    dungeonDepthScore: finiteNumber(raw.dungeonDepthScore, 0),
+    legacyAshScore: finiteNumber(raw.legacyAshScore, 0),
+    survivalScore: finiteNumber(raw.survivalScore, 0),
+    discoveryScore: finiteNumber(raw.discoveryScore, 0),
+    buildDiversityScore: finiteNumber(raw.buildDiversityScore, 0),
+    dominancePenalty: finiteNumber(raw.dominancePenalty, 0),
+  };
+}
+
+function migrateLegacyAsh(value: unknown): PlaythroughLegacyAsh {
+  const raw = isRecord(value) ? value : {};
+  const baseRaw = isRecord(raw.baseBreakdown) ? raw.baseBreakdown : {};
+
+  return {
+    earned: nonNegativeNumber(raw.earned, 0),
+    baseBreakdown: {
+      total: nonNegativeNumber(baseRaw.total, 0),
+      depthBonus: nonNegativeNumber(baseRaw.depthBonus, 0),
+      ageBonus: nonNegativeNumber(baseRaw.ageBonus, 0),
+      bossBonus: nonNegativeNumber(baseRaw.bossBonus, 0),
+      dungeonBonus: nonNegativeNumber(baseRaw.dungeonBonus, 0),
+    },
+    evolutionBonus: nonNegativeNumber(raw.evolutionBonus, 0),
+    momentumBonus: nonNegativeNumber(raw.momentumBonus, 0),
+  };
+}
+
+function migratePlaythroughRecord(
+  value: unknown,
+  fallbackNowUnixSec: number,
+  metaFallback: MetaProgress
+): PlaythroughRecord | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string") return null;
+
+  const finalRun = migrateRun(value.finalRun, fallbackNowUnixSec);
+  if (!finalRun) return null;
+
+  const finalMeta = migrateMeta(value.finalMeta, metaFallback);
+  const timeline = Array.isArray(value.timeline)
+    ? value.timeline.map(migrateTimelineEvent).filter((entry): entry is PlaythroughTimelineEvent => entry !== null)
+    : [];
+
+  return {
+    id: value.id,
+    recordVersion: Math.max(1, Math.floor(finiteNumber(value.recordVersion, 1))),
+    recordedAtUnixSec: nonNegativeNumber(value.recordedAtUnixSec, fallbackNowUnixSec),
+    seed: Math.floor(finiteNumber(value.seed, finalRun.seed)),
+    outcome: value.outcome === "abandoned" ? "abandoned" : "death",
+    finalRun,
+    finalMeta,
+    finalScore: migrateScoreSummary(value.finalScore),
+    legacyAsh: migrateLegacyAsh(value.legacyAsh),
+    timeline,
+  };
+}
+
+function migratePlaythroughArchive(
+  value: unknown,
+  fallbackNowUnixSec: number,
+  metaFallback: MetaProgress
+): PlaythroughArchive {
+  if (!isRecord(value)) {
+    return emptyPlaythroughArchive();
+  }
+
+  const configuredMax = Math.max(
+    1,
+    Math.floor(nonNegativeNumber(value.maxRecords, PLAYTHROUGH_ARCHIVE_MAX_RECORDS))
+  );
+  const records = Array.isArray(value.records)
+    ? value.records
+        .map((entry) => migratePlaythroughRecord(entry, fallbackNowUnixSec, metaFallback))
+        .filter((entry): entry is PlaythroughRecord => entry !== null)
+    : [];
+
+  return {
+    version: Math.max(PLAYTHROUGH_ARCHIVE_VERSION, Math.floor(finiteNumber(value.version, PLAYTHROUGH_ARCHIVE_VERSION))),
+    maxRecords: configuredMax,
+    records: records.slice(Math.max(0, records.length - configuredMax)),
+  };
 }
 
 function migrateActiveDungeon(value: unknown): ActiveDungeonState | null {
@@ -159,33 +295,49 @@ export function freshSave(nowUnixSec: number): SaveFile {
       legacyPerks: [],
     },
     currentRun: null,
+    playthroughArchive: emptyPlaythroughArchive(),
   };
 }
 
 export function migrateSave(input: SaveFile): SaveFile {
   const updatedAtUnixSec = finiteNumber(input.updatedAtUnixSec, 0);
   const base = freshSave(updatedAtUnixSec);
-  const meta: Record<string, unknown> = isRecord(input.meta) ? input.meta : {};
+  const inputRecord: Record<string, unknown> = isRecord(input) ? input : {};
+  const meta = migrateMeta(input.meta, base.meta);
 
   return {
     version: SAVE_VERSION,
     updatedAtUnixSec,
-    meta: {
-      unlockedDungeonIds: hasStringArray(meta.unlockedDungeonIds)
-        ? uniqueStrings(meta.unlockedDungeonIds)
-        : base.meta.unlockedDungeonIds,
-      unlockedJobIds: hasStringArray(meta.unlockedJobIds)
-        ? uniqueStrings(meta.unlockedJobIds)
-        : base.meta.unlockedJobIds,
-      discoveredTraitIds: uniqueStrings(meta.discoveredTraitIds),
-      discoveredItemIds: uniqueStrings(meta.discoveredItemIds),
-      codexEntries: uniqueStrings(meta.codexEntries),
-      legacyAsh: nonNegativeNumber(meta.legacyAsh, 0),
-      totalRuns: nonNegativeNumber(meta.totalRuns, 0),
-      legacyPath: validLegacyPath(meta.legacyPath),
-      legacyPerks: uniqueStrings(meta.legacyPerks),
-    },
+    meta,
     currentRun: migrateRun(input.currentRun, updatedAtUnixSec),
+    playthroughArchive: migratePlaythroughArchive(
+      inputRecord.playthroughArchive,
+      updatedAtUnixSec,
+      base.meta
+    ),
+  };
+}
+
+export function appendPlaythroughRecord(
+  save: SaveFile,
+  record: PlaythroughRecord
+): SaveFile {
+  const currentArchive = save.playthroughArchive ?? emptyPlaythroughArchive();
+  const maxRecords = Math.max(
+    1,
+    Math.floor(
+      nonNegativeNumber(currentArchive.maxRecords, PLAYTHROUGH_ARCHIVE_MAX_RECORDS)
+    )
+  );
+  const nextRecords = [...currentArchive.records, record];
+
+  return {
+    ...save,
+    playthroughArchive: {
+      version: PLAYTHROUGH_ARCHIVE_VERSION,
+      maxRecords,
+      records: nextRecords.slice(Math.max(0, nextRecords.length - maxRecords)),
+    },
   };
 }
 

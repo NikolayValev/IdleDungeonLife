@@ -4,8 +4,9 @@ import { SeededRandomProvider, deriveSeed } from "./rng";
 import { tickLifespan, applyDungeonWear } from "./lifespan";
 import { computeStats } from "./modifiers";
 import { computeDungeonScore, resolveDungeonOutcome } from "./stats";
-import { computeLegacyAshReward } from "./scoring";
-import { trackEvent } from "./analytics";
+import { computeLegacyAshBreakdown, computeLegacyAshReward, scoreRun } from "./scoring";
+import { resetAnalyticsTimeline, snapshotAnalyticsTimeline, trackEvent } from "./analytics";
+import { appendPlaythroughRecord } from "./save";
 import { TRAIT_REGISTRY, TRAITS } from "../content/traits";
 import { JOB_REGISTRY } from "../content/jobs";
 import { DUNGEON_REGISTRY } from "../content/dungeons";
@@ -281,6 +282,10 @@ function buildNewRun(seed: number, nowUnixSec: number, meta?: MetaProgress): Run
   };
 }
 
+function makePlaythroughId(run: RunState, nowUnixSec: number, runNumber: number): string {
+  return `run_${run.seed}_${runNumber}_${Math.floor(run.lifespan.ageSeconds)}_${nowUnixSec}`;
+}
+
 // ─── Offline Reconciliation ───────────────────────────────────────────────────
 
 function applyTick(run: RunState, nowUnixSec: number): RunState {
@@ -378,6 +383,8 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const seed =
         event.seed ?? Math.floor((event.nowUnixSec * 1234567) ^ 0xdeadbeef);
       const run = buildNewRun(seed, event.nowUnixSec, state.meta);
+
+      resetAnalyticsTimeline();
 
       trackEvent("run_started", {
         seed,
@@ -969,9 +976,13 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const run = state.currentRun;
       if (run.alive) return state;
       const evolutionCount = run.evolvedTraitIds.length;
-      const ashEarned = computeLegacyAshReward(run) +
-        evolutionCount * BALANCE.legacyAsh.evolutionBonus +
+      const baseAshBreakdown = computeLegacyAshBreakdown(run);
+      const momentumBonus =
         Math.floor((run.discoveryMomentum ?? 0) / 5) * BALANCE.legacyAsh.momentumBonus;
+      const evolutionBonus = evolutionCount * BALANCE.legacyAsh.evolutionBonus;
+      const ashEarned = computeLegacyAshReward(run) +
+        evolutionBonus +
+        momentumBonus;
 
       // Discover traits on death
       const newDiscoveredTraits = new Set([
@@ -998,17 +1009,46 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         legacyAshEarned: ashEarned,
       });
 
-      return {
+      const nextMeta = {
+        ...state.meta,
+        legacyAsh: state.meta.legacyAsh + ashEarned,
+        discoveredTraitIds: [...newDiscoveredTraits],
+        codexEntries: [...newCodexEntries],
+      };
+
+      const discoveryCount = new Set([
+        ...run.visibleTraitIds,
+        ...run.hiddenTraitIds,
+        ...run.inventory.items.map((item) => item.itemId),
+      ]).size;
+      const runScore = scoreRun(run, discoveryCount);
+      const timeline = snapshotAnalyticsTimeline(true);
+      const playthroughRecord = {
+        id: makePlaythroughId(run, event.nowUnixSec, state.meta.totalRuns),
+        recordVersion: 1,
+        recordedAtUnixSec: event.nowUnixSec,
+        seed: run.seed,
+        outcome: "death" as const,
+        finalRun: run,
+        finalMeta: nextMeta,
+        finalScore: runScore,
+        legacyAsh: {
+          earned: ashEarned,
+          baseBreakdown: baseAshBreakdown,
+          evolutionBonus,
+          momentumBonus,
+        },
+        timeline,
+      };
+
+      const nextState = {
         ...state,
         updatedAtUnixSec: event.nowUnixSec,
-        meta: {
-          ...state.meta,
-          legacyAsh: state.meta.legacyAsh + ashEarned,
-          discoveredTraitIds: [...newDiscoveredTraits],
-          codexEntries: [...newCodexEntries],
-        },
+        meta: nextMeta,
         currentRun: null,
       };
+
+      return appendPlaythroughRecord(nextState, playthroughRecord);
     }
 
     case "RECONCILE_OFFLINE": {

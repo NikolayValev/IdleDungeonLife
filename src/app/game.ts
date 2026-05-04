@@ -3,6 +3,7 @@ import type { SaveFile } from "../core/types";
 import type { GameEvent } from "../core/events";
 import { reduceGame, reconcileOffline } from "../core/reducer";
 import { saveToDisk, loadFromDisk, freshSave } from "../core/save";
+import { LocalArrayAnalyticsSink, setAnalyticsSink } from "../core/analytics";
 
 /**
  * Central game controller — owns save state and dispatches events to the reducer.
@@ -13,6 +14,8 @@ export class GameController extends Phaser.Game {
 
   constructor(config: Phaser.Types.Core.GameConfig) {
     super(config);
+    setAnalyticsSink(new LocalArrayAnalyticsSink());
+
     const now = Math.floor(Date.now() / 1000);
     const existing = loadFromDisk();
 

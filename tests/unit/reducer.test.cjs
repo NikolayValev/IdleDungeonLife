@@ -10,6 +10,11 @@ const {
   grantItem,
   approx,
 } = require("./helpers.cjs");
+const {
+  ConsoleAnalyticsSink,
+  LocalArrayAnalyticsSink,
+  setAnalyticsSink,
+} = require("../../.test-build/src/core/analytics.js");
 const { computeStats } = require("../../.test-build/src/core/modifiers.js");
 const { computeDungeonScore } = require("../../.test-build/src/core/stats.js");
 
@@ -141,6 +146,39 @@ test("CLAIM_DEATH archives traits and clears the run", () => {
   assert.ok(claimed.meta.legacyAsh > 0);
   assert.ok(claimed.meta.discoveredTraitIds.length >= 2);
   assert.ok(claimed.meta.codexEntries.some((entry) => entry.startsWith("trait:")));
+});
+
+test("CLAIM_DEATH appends a playthrough record with timeline", () => {
+  const sink = new LocalArrayAnalyticsSink();
+  setAnalyticsSink(sink);
+  try {
+    let save = startRun(505, 1000);
+    save = addResources(save, 100, 0);
+    save = reduceGame(save, {
+      type: "START_DUNGEON",
+      dungeonId: "abandoned_chapel",
+      nowUnixSec: 1000,
+    });
+    save = reduceGame(save, {
+      type: "COMPLETE_DUNGEON",
+      nowUnixSec: 1060,
+    });
+    save = reduceGame(save, { type: "DEBUG_KILL_RUN" });
+
+    const claimed = reduceGame(save, { type: "CLAIM_DEATH", nowUnixSec: 1100 });
+
+    assert.equal(claimed.playthroughArchive.records.length, 1);
+    const record = claimed.playthroughArchive.records[0];
+    assert.equal(record.seed, 505);
+    assert.equal(record.outcome, "death");
+    assert.equal(record.finalRun.alive, false);
+    assert.equal(record.finalMeta.legacyAsh, claimed.meta.legacyAsh);
+    assert.ok(record.timeline.length > 0);
+    assert.ok(record.timeline.some((event) => event.name === "run_died"));
+    assert.ok(record.timeline.some((event) => event.name === "run_summary"));
+  } finally {
+    setAnalyticsSink(new ConsoleAnalyticsSink());
+  }
 });
 
 test("CLAIM_DEATH is ignored while the run is still alive", () => {
