@@ -20,4 +20,11 @@ export type GameEvent =
   | { type: "CLAIM_DEATH"; nowUnixSec: number }
   | { type: "RECONCILE_OFFLINE"; nowUnixSec: number }
   | { type: "CHOOSE_LEGACY_PATH"; path: "holy" | "abyss" | "knowledge" }
-  | { type: "PURCHASE_LEGACY_PERK"; perkId: string };
+  | { type: "PURCHASE_LEGACY_PERK"; perkId: string }
+  // Sub-character events
+  | { type: "CREATE_SUBCHARACTER"; name: string; nowUnixSec: number }
+  | { type: "START_SUBCHARACTER_RUN"; subCharId: string; nowUnixSec: number }
+  | { type: "CLAIM_SUBCHARACTER_DEATH"; subCharId: string; nowUnixSec: number }
+  | { type: "AUTO_RUN_SUBCHARACTER"; subCharId: string; nowUnixSec: number }
+  | { type: "UNLOCK_ACHIEVEMENT"; achievementId: string; nowUnixSec: number }
+  | { type: "TOGGLE_SUBCHARACTER_AUTOMATION"; subCharId: string; enabled: boolean; nowUnixSec: number };

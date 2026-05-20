@@ -8,6 +8,8 @@ import { InventoryScene } from "../ui/scenes/InventoryScene";
 import { TalentsScene } from "../ui/scenes/TalentsScene";
 import { DeathScene } from "../ui/scenes/DeathScene";
 import { CodexScene } from "../ui/scenes/CodexScene";
+import { SubCharactersScene } from "../ui/scenes/SubCharactersScene";
+import { AchievementsScene } from "../ui/scenes/AchievementsScene";
 import { LAYOUT } from "../ui/theme";
 import { createDebugActions, registerDebugKeys } from "./debug";
 import { saveToDisk } from "../core/save";
@@ -41,6 +43,8 @@ const config: Phaser.Types.Core.GameConfig = {
     TalentsScene,
     CodexScene,
     DeathScene,
+    SubCharactersScene,
+    AchievementsScene,
     HudScene,
   ],
 };
@@ -169,6 +173,13 @@ function installDevHooks(
 }
 
 export function bootstrap(): GameController {
+  // Request portrait-only orientation lock for mobile devices
+  if (typeof screen !== "undefined" && (screen.orientation as any)?.lock) {
+    (screen.orientation as any).lock("portrait").catch(() => {
+      // Silently ignore — desktop browsers reject this call
+    });
+  }
+
   // Create GameController (extends Phaser.Game)
   const game = new GameController(config);
 
@@ -184,6 +195,15 @@ export function bootstrap(): GameController {
     game.scene.start("HudScene");
     game.scene.start("MainScene");
     game.scene.bringToTop("HudScene");
+  });
+
+  // Android hardware back button — navigate to MainScene instead of exiting
+  document.addEventListener("backbutton", (e) => {
+    e.preventDefault();
+    const hud = game.scene.getScene("HudScene") as any;
+    if (hud?.showTab) {
+      hud.showTab("MainScene");
+    }
   });
 
   // Debug tools (dev only)

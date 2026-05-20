@@ -1,0 +1,24 @@
+{
+  "name": "Idle Dungeon Life",
+  "short_name": "IDL",
+  "description": "An idle dungeon-crawling life sim — watch your character grow, fight, and die.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0d0d",
+  "theme_color": "#e2b96f",
+  "icons": [
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

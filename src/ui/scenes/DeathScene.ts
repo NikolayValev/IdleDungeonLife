@@ -100,12 +100,22 @@ export class DeathScene extends BaseScene {
     y += 34;
 
     if (!run) {
-      this.add.text(LAYOUT.width / 2, y, "No run data.", {
+      // Run was already claimed (e.g. legacy path button was pressed) — show summary prompt
+      this.add.text(LAYOUT.width / 2, y, `Legacy Ash: ${meta.legacyAsh}`, {
         fontFamily: FONTS.body,
-        fontSize: "14px",
-        color: COLORS.textMuted,
+        fontSize: "16px",
+        color: COLORS.accent,
       }).setOrigin(0.5, 0);
-      y += 32;
+      y += 28;
+      if (meta.legacyPath) {
+        this.add.text(LAYOUT.width / 2, y, `Path: ${meta.legacyPath.charAt(0).toUpperCase() + meta.legacyPath.slice(1)}`, {
+          fontFamily: FONTS.body,
+          fontSize: "13px",
+          color: COLORS.textSecondary,
+        }).setOrigin(0.5, 0);
+        y += 20;
+      }
+      y += 12;
     } else {
       const ash = computeLegacyAshBreakdown(run);
       const totalAshAfterClaim = meta.legacyAsh + ash.total;
@@ -212,97 +222,87 @@ export class DeathScene extends BaseScene {
         );
       }
 
+      // Evolutions achieved this run
+      const evolutionCount = run.evolvedTraitIds.length;
+      if (evolutionCount > 0) {
+        y = drawSectionTitle(this, y, `Evolutions achieved: ${evolutionCount}`, COLORS.accentHoly);
+        y = drawSectionLines(
+          this,
+          y,
+          run.evolvedTraitIds.map((tid) => {
+            const def = TRAIT_REGISTRY.get(tid);
+            return {
+              text: `  ${def?.evolutionName ?? def?.name ?? tid}`,
+              color: COLORS.accent,
+            };
+          })
+        );
+      }
+
+      // Clamp y before interactive elements so buttons don't overflow off-screen
       if (y > LAYOUT.height - LAYOUT.tabBarHeight - 84) {
         y = LAYOUT.height - LAYOUT.tabBarHeight - 84;
-            if (nextTargets.length > 0) {
-              y = drawSectionTitle(this, y, "Next Unlock Targets", COLORS.textSecondary);
-              y = drawSectionLines(
-                this,
-                y,
-                takePreview(nextTargets).map((entry) => ({
-                  text: `${entry.kind}: ${entry.name} (${entry.cost} Ash)`,
-                  color: COLORS.textMuted,
-                }))
-              );
-            }
+      }
 
-            // Evolutions achieved this run
-            const evolutionCount = run.evolvedTraitIds.length;
-            if (evolutionCount > 0) {
-              y = drawSectionTitle(this, y, `Evolutions achieved: ${evolutionCount}`, COLORS.accentHoly);
-              y = drawSectionLines(
-                this,
-                y,
-                run.evolvedTraitIds.map((tid) => {
-                  const def = TRAIT_REGISTRY.get(tid);
-                  return {
-                    text: `  ${def?.evolutionName ?? def?.name ?? tid}`,
-                    color: COLORS.accent,
-                  };
-                })
-              );
-            }
+      // Legacy path selection or perk purchases
+      const pathAfterClaim = meta.legacyPath ?? null;
+      if (!pathAfterClaim && totalAshAfterClaim >= 5) {
+        y = drawSectionTitle(this, y, "Choose Your Legacy Path", COLORS.accent);
+        y = drawSectionLines(this, y, [
+          { text: "Your lineage must choose a road. This cannot be undone.", color: COLORS.textMuted },
+        ]);
+        for (const path of ["holy", "abyss", "knowledge"] as const) {
+          const btn = this.add
+            .text(P + 8, y, `[ Path of ${path.charAt(0).toUpperCase() + path.slice(1)} ]`, {
+              fontFamily: FONTS.body,
+              fontSize: "13px",
+              color: COLORS.textSecondary,
+            })
+            .setInteractive({ useHandCursor: true });
+          btn.on("pointerover", () => btn.setColor(COLORS.accent));
+          btn.on("pointerout", () => btn.setColor(COLORS.textSecondary));
+          btn.on("pointerup", () => {
+            this.dispatch({ type: "CLAIM_DEATH", nowUnixSec: this.nowUnixSec });
+            this.dispatch({ type: "CHOOSE_LEGACY_PATH", path });
+            this.refresh();
+          });
+          y += 22;
+        }
+      } else if (pathAfterClaim) {
+        const availablePerks = LEGACY_PERKS.filter((perk) =>
+          canPurchasePerk(perk.id, pathAfterClaim, meta.legacyPerks ?? [], totalAshAfterClaim)
+        ).slice(0, 3);
+        if (availablePerks.length > 0) {
+          y = drawSectionTitle(this, y, `Legacy Perks (${pathAfterClaim})`, COLORS.accent);
+          for (const perk of availablePerks) {
+            const btn = this.add
+              .text(P + 8, y, `[ ${perk.name} - ${perk.costAsh} Ash ]`, {
+                fontFamily: FONTS.body,
+                fontSize: "12px",
+                color: COLORS.textSecondary,
+              })
+              .setInteractive({ useHandCursor: true });
+            btn.on("pointerover", () => btn.setColor(COLORS.accent));
+            btn.on("pointerout", () => btn.setColor(COLORS.textSecondary));
+            btn.on("pointerup", () => {
+              this.dispatch({ type: "CLAIM_DEATH", nowUnixSec: this.nowUnixSec });
+              this.dispatch({ type: "PURCHASE_LEGACY_PERK", perkId: perk.id });
+              this.refresh();
+            });
+            y += 18;
+            this.add.text(P + 16, y, perk.description, {
+              fontFamily: FONTS.body,
+              fontSize: "11px",
+              color: COLORS.textMuted,
+              wordWrap: { width: CONTENT_WIDTH - 24 },
+            });
+            y += 20;
+          }
+        }
+      }
 
-            // Legacy path selection or perk purchases
-            const pathAfterClaim = meta.legacyPath ?? null;
-            if (!pathAfterClaim && totalAshAfterClaim >= 5) {
-              y = drawSectionTitle(this, y, "Choose Your Legacy Path", COLORS.accent);
-              y = drawSectionLines(this, y, [
-                { text: "Your lineage must choose a road. This cannot be undone.", color: COLORS.textMuted },
-              ]);
-              for (const path of ["holy", "abyss", "knowledge"] as const) {
-                const btn = this.add
-                  .text(P + 8, y, `[ Path of ${path.charAt(0).toUpperCase() + path.slice(1)} ]`, {
-                    fontFamily: FONTS.body,
-                    fontSize: "13px",
-                    color: COLORS.textSecondary,
-                  })
-                  .setInteractive({ useHandCursor: true });
-                btn.on("pointerover", () => btn.setColor(COLORS.accent));
-                btn.on("pointerout", () => btn.setColor(COLORS.textSecondary));
-                btn.on("pointerup", () => {
-                  this.dispatch({ type: "CLAIM_DEATH", nowUnixSec: this.nowUnixSec });
-                  this.dispatch({ type: "CHOOSE_LEGACY_PATH", path });
-                  this.refresh();
-                });
-                y += 22;
-              }
-            } else if (pathAfterClaim) {
-              const availablePerks = LEGACY_PERKS.filter((perk) =>
-                canPurchasePerk(perk.id, pathAfterClaim, meta.legacyPerks ?? [], totalAshAfterClaim)
-              ).slice(0, 3);
-              if (availablePerks.length > 0) {
-                y = drawSectionTitle(this, y, `Legacy Perks (${pathAfterClaim})`, COLORS.accent);
-                for (const perk of availablePerks) {
-                  const btn = this.add
-                    .text(P + 8, y, `[ ${perk.name} - ${perk.costAsh} Ash ]`, {
-                      fontFamily: FONTS.body,
-                      fontSize: "12px",
-                      color: COLORS.textSecondary,
-                    })
-                    .setInteractive({ useHandCursor: true });
-                  btn.on("pointerover", () => btn.setColor(COLORS.accent));
-                  btn.on("pointerout", () => btn.setColor(COLORS.textSecondary));
-                  btn.on("pointerup", () => {
-                    this.dispatch({ type: "CLAIM_DEATH", nowUnixSec: this.nowUnixSec });
-                    this.dispatch({ type: "PURCHASE_LEGACY_PERK", perkId: perk.id });
-                    this.refresh();
-                  });
-                  y += 18;
-                  this.add.text(P + 16, y, perk.description, {
-                    fontFamily: FONTS.body,
-                    fontSize: "11px",
-                    color: COLORS.textMuted,
-                    wordWrap: { width: CONTENT_WIDTH - 24 },
-                  });
-                  y += 20;
-                }
-              }
-            }
-
-            if (y > LAYOUT.height - LAYOUT.tabBarHeight - 84) {
-              y = LAYOUT.height - LAYOUT.tabBarHeight - 84;
-            }
+      if (y > LAYOUT.height - LAYOUT.tabBarHeight - 84) {
+        y = LAYOUT.height - LAYOUT.tabBarHeight - 84;
       }
     }
 
@@ -345,7 +345,10 @@ export class DeathScene extends BaseScene {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".json";
+      input.style.display = "none";
+      document.body.appendChild(input);
       input.onchange = (e: Event) => {
+        document.body.removeChild(input);
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
         const reader = new FileReader();
@@ -353,21 +356,22 @@ export class DeathScene extends BaseScene {
           try {
             const text = event.target?.result as string;
             const imported = JSON.parse(text);
-            // Dispatch custom event or call reducer to load the imported save
-            // For now, we'll use localStorage directly as a shortcut
             if (typeof imported === "object" && imported !== null) {
               localStorage.setItem("idleDungeonSave", JSON.stringify(imported));
               window.location.reload();
             }
           } catch {
-            alert("Failed to import save. Invalid JSON format.");
+            console.error("Failed to import save: invalid JSON");
           }
         };
         reader.readAsText(file);
       };
-      document.body.appendChild(input);
+      // Keep input in DOM until onChange fires; clean up if user cancels
+      const cleanup = () => {
+        if (document.body.contains(input)) document.body.removeChild(input);
+      };
+      window.addEventListener("focus", cleanup, { once: true });
       input.click();
-      document.body.removeChild(input);
     });
 
     buttonY += 24;

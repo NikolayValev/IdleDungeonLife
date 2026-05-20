@@ -80,17 +80,29 @@ export class DungeonsScene extends BaseScene {
         if (run) {
           const score = computeDungeonScore(run, dungeon.tags);
           const outcome = resolveDungeonOutcome(score, dungeon.difficulty);
+          const pct = Math.round((score / dungeon.difficulty) * 100);
           const outcomeColor =
             outcome === "success"
               ? COLORS.vitalityHigh
               : outcome === "partial"
               ? COLORS.vitalityMid
               : COLORS.vitalityLow;
-          this.add.text(LAYOUT.width - P - 8, y + 50, outcome.toUpperCase(), {
+          const outcomeLabel =
+            outcome === "success" ? "LIKELY WIN"
+              : outcome === "partial" ? "RISKY"
+              : "LIKELY FAIL";
+
+          this.add.text(LAYOUT.width - P - 8, y + 30, "FORECAST", {
+            fontFamily: FONTS.body,
+            fontSize: "9px",
+            color: COLORS.textMuted,
+          }).setOrigin(1, 0);
+
+          this.add.text(LAYOUT.width - P - 8, y + 41, `${outcomeLabel} (${pct}%)`, {
             fontFamily: FONTS.body,
             fontSize: "11px",
             color: outcomeColor,
-          }).setOrigin(1, 0.5);
+          }).setOrigin(1, 0);
         }
 
         if (isActive) {
@@ -134,21 +146,31 @@ export class DungeonsScene extends BaseScene {
           color: COLORS.locked,
         });
 
-        // Unlock button if affordable
-        if (req?.legacyAsh && meta.legacyAsh >= req.legacyAsh) {
+        // Unlock button (always shown; interactive only when affordable)
+        if (req?.legacyAsh) {
+          const canUnlock = meta.legacyAsh >= req.legacyAsh;
           const unlockBtn = this.add
             .text(LAYOUT.width - P - 8, y + 8, "[ Unlock ]", {
               fontFamily: FONTS.body,
               fontSize: "13px",
-              color: COLORS.accent,
+              color: canUnlock ? COLORS.accent : COLORS.btnDisabledText,
             })
-            .setOrigin(1, 0)
-            .setInteractive({ useHandCursor: true });
+            .setOrigin(1, 0);
 
-          unlockBtn.on("pointerup", () => {
-            (this.game as any).unlockDungeon(dungeon.id);
-            this.refresh();
-          });
+          if (canUnlock) {
+            unlockBtn.setInteractive({ useHandCursor: true });
+            unlockBtn.on("pointerup", () => {
+              (this.game as any).unlockDungeon(dungeon.id);
+              this.refresh();
+            });
+          }
+
+          // Show current ash vs required so player knows progress
+          this.add.text(LAYOUT.width - P - 8, y + 28, `${meta.legacyAsh} / ${req.legacyAsh} Ash`, {
+            fontFamily: FONTS.body,
+            fontSize: "10px",
+            color: canUnlock ? COLORS.vitalityHigh : COLORS.textMuted,
+          }).setOrigin(1, 0);
         }
       }
 

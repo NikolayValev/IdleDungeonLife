@@ -1,4 +1,4 @@
-import type { RunState, ComputedStats } from "./types";
+import type { RunState } from "./types";
 import { computeStats } from "./modifiers";
 
 /**
@@ -44,9 +44,3 @@ export function resolveDungeonOutcome(
   return "failure";
 }
 
-/**
- * Compute stats for the run with the given context.
- */
-export function getRunStats(run: RunState): ComputedStats {
-  return computeStats(run);
-}

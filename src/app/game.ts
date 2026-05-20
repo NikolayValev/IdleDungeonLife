@@ -30,8 +30,13 @@ export class GameController extends Phaser.Game {
   }
 
   dispatch(event: GameEvent): void {
-    this.saveFile = reduceGame(this.saveFile, event);
-    saveToDisk(this.saveFile);
+    try {
+      this.saveFile = reduceGame(this.saveFile, event);
+      saveToDisk(this.saveFile);
+    } catch (err) {
+      console.error("[GameController] dispatch error for event", event.type, err);
+      // Preserve current save state — do not corrupt disk on reducer failure
+    }
   }
 
   unlockDungeon(dungeonId: string): void {

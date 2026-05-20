@@ -9,19 +9,38 @@
     "dev:restart": "powershell -ExecutionPolicy Bypass -File scripts/dev-start.ps1 -ForceRestart",
     "dev:status": "powershell -ExecutionPolicy Bypass -File scripts/dev-status.ps1",
     "dev:stop": "powershell -ExecutionPolicy Bypass -File scripts/dev-stop.ps1",
-    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "lint": "eslint src",
+    "format": "prettier --write src tests/unit",
+    "format:check": "prettier --check src tests/unit",
     "build": "tsc && vite build --configLoader native",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:init": "npx cap init \"Idle Dungeon Life\" com.idledungeonlife.app --web-dir dist",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@types/node": "^25.5.0",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
     "typescript": "~5.9.3",
-    "vite": "^8.0.1"
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.1",
+    "vitest": "^4.1.6"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.3",
+    "@capacitor/cli": "^8.3.3",
+    "@capacitor/core": "^8.3.3",
+    "@capacitor/ios": "^8.3.3",
     "@resvg/resvg-js": "^2.6.2",
     "phaser": "^3.90.0"
   }

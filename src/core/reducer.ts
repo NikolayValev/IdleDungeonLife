@@ -1,4 +1,4 @@
-﻿import type { SaveFile, RunState, ItemInstance, Tag, RunLogEntry, RunLogKind } from "./types";
+﻿import type { SaveFile, RunState, ItemInstance, Tag, RunLogEntry, RunLogKind, AchievementTracker } from "./types";
 import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
 import { tickLifespan, applyDungeonWear } from "./lifespan";
@@ -15,9 +15,10 @@ import { LOOT_TABLE_REGISTRY } from "../content/lootTables";
 import { ITEM_REGISTRY } from "../content/items";
 import { BALANCE } from "../content/balance";
 import { LEGACY_PERK_REGISTRY, canPurchasePerk } from "../content/legacyPerks";
+import { ACHIEVEMENT_REGISTRY } from "../content/achievements";
 import type { MetaProgress } from "./types";
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 function makeInstanceId(
   seed: number,
@@ -130,7 +131,7 @@ function evolveTraitsForTrigger(
   return { evolvedTraitIds, newlyEvolvedIds };
 }
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// ─── Starting Traits ─────────────────────────────────────────────────────────
 
 function generateStartingTraits(
   seed: number
@@ -158,7 +159,7 @@ function generateStartingTraits(
   return { visibleTraitIds: visible, hiddenTraitIds: hidden };
 }
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// ─── Loot Generation ─────────────────────────────────────────────────────────
 
 function rollLoot(
   lootTableId: string,
@@ -239,7 +240,7 @@ function pushLog(run: RunState, kind: RunLogKind, message: string, timestampSec:
   return { ...run, runLog: newLog.length > RUN_LOG_MAX ? newLog.slice(newLog.length - RUN_LOG_MAX) : newLog };
 }
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// ─── Run Builder ─────────────────────────────────────────────────────────────
 
 function buildNewRun(seed: number, nowUnixSec: number, meta?: MetaProgress): RunState {
   const { visibleTraitIds, hiddenTraitIds } = generateStartingTraits(seed);
@@ -286,16 +287,16 @@ function makePlaythroughId(run: RunState, nowUnixSec: number, runNumber: number)
   return `run_${run.seed}_${runNumber}_${Math.floor(run.lifespan.ageSeconds)}_${nowUnixSec}`;
 }
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// ─── Tick Logic ──────────────────────────────────────────────────────────────
 
-function applyTick(run: RunState, nowUnixSec: number): RunState {
+function applyTick(run: RunState, nowUnixSec: number, achievements?: AchievementTracker): RunState {
   if (!run.alive) return run;
 
   const elapsed = Math.max(0, nowUnixSec - run.lastTickUnixSec);
   if (elapsed === 0) return run;
 
   let updated = { ...run, lastTickUnixSec: nowUnixSec };
-  const stats = computeStats(updated);
+  const stats = computeStats(updated, { achievements });
 
   // Job income
   if (updated.currentJobId) {
@@ -336,7 +337,7 @@ function applyTick(run: RunState, nowUnixSec: number): RunState {
   return updated;
 }
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// ─── Discovery Momentum ──────────────────────────────────────────────────────
 
 /**
  * Attempt a seeded trait reveal driven by accumulated discovery momentum.
@@ -375,7 +376,51 @@ function applyDiscoveryMomentumReveals(
   return { run: current, revealedTraitIds: allRevealedIds };
 }
 
-// ─── Offline Reconciliation ───────────────────────────────────────────────────
+// Helper: Check and unlock achievements based on current milestones
+function checkAndUnlockAchievements(save: SaveFile): SaveFile {
+  const tracker = save.achievements;
+  const milestones = tracker.milestoneProgress;
+  let current = save;
+
+  for (const achDef of ACHIEVEMENT_REGISTRY.values()) {
+    if (tracker.unlockedIds.includes(achDef.id)) continue;
+
+    let shouldUnlock = false;
+    if (achDef.triggerType === "bossCount" && milestones.totalBossesFelled >= achDef.triggerValue) {
+      shouldUnlock = true;
+    } else if (
+      achDef.triggerType === "survivalTime" &&
+      milestones.totalSurvivalSeconds >= achDef.triggerValue
+    ) {
+      shouldUnlock = true;
+    } else if (
+      achDef.triggerType === "depthReached" &&
+      milestones.maxDepthEverReached >= achDef.triggerValue
+    ) {
+      shouldUnlock = true;
+    } else if (achDef.triggerType === "pathCompleted") {
+      // Extract the specific path from the achievement ID (e.g. "path_holy" → "holy")
+      const requiredPath = achDef.id.replace(/^path_/, "");
+      if (milestones.distinctPathsCompleted.includes(requiredPath)) {
+        shouldUnlock = true;
+      }
+    }
+
+    if (shouldUnlock) {
+      current = {
+        ...current,
+        achievements: {
+          ...current.achievements,
+          unlockedIds: [...current.achievements.unlockedIds, achDef.id],
+        },
+      };
+    }
+  }
+
+  return current;
+}
+
+// ─── Reducer ─────────────────────────────────────────────────────────────────
 
 export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
   switch (event.type) {
@@ -406,7 +451,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
     case "TICK": {
       if (!state.currentRun) return state;
-      const updated = applyTick(state.currentRun, event.nowUnixSec);
+      const updated = applyTick(state.currentRun, event.nowUnixSec, state.achievements);
       const ageReveal = revealTraitsForTrigger(updated, "ageReached");
       const ageEvolve = evolveTraitsForTrigger(
         { ...updated, visibleTraitIds: ageReveal.visibleTraitIds, hiddenTraitIds: ageReveal.hiddenTraitIds },
@@ -414,7 +459,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       );
 
       // discoveryMomentum passively ticks (tiny rate, gated on discoveryRate)
-      const tickStats = computeStats(updated);
+      const tickStats = computeStats(updated, { achievements: state.achievements });
       const elapsed = Math.max(0, event.nowUnixSec - state.currentRun.lastTickUnixSec);
       const momentumGain = tickStats.discoveryRate * 0.004 * elapsed;
       const rawMomentum = (updated.discoveryMomentum ?? 0) + momentumGain;
@@ -568,7 +613,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const dungeon = DUNGEON_REGISTRY.get(activeDungeon.dungeonId);
       if (!dungeon) return state;
 
-      const stats = computeStats(state.currentRun, { dungeonTags: dungeon.tags });
+      const stats = computeStats(state.currentRun, { dungeonTags: dungeon.tags, achievements: state.achievements });
       const score = computeDungeonScore(state.currentRun, dungeon.tags);
       const outcome = resolveDungeonOutcome(score, dungeon.difficulty);
 
@@ -724,7 +769,10 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             alignment: { holyUnholy: newAlignment },
             evolvedTraitIds: finalEvolvedTraitIds,
             inventory: {
-              items: [...state.currentRun.inventory.items, ...loot.items],
+              items: [
+                ...state.currentRun.inventory.items,
+                ...loot.items,
+              ].slice(-BALANCE.loot.inventoryCap),
             },
             resources: {
               gold: state.currentRun.resources.gold + goldReward,
@@ -946,7 +994,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       if (!prereqsMet) return state;
 
       // Check cost — ceil to match what TalentsScene displays
-      const stats = computeStats(state.currentRun);
+      const stats = computeStats(state.currentRun, { achievements: state.achievements });
       const cost = Math.ceil(node.costEssence * stats.talentCostMultiplier);
       if (state.currentRun.resources.essence < cost) return state;
 
@@ -1041,14 +1089,31 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         timeline,
       };
 
-      const nextState = {
+      const runBossCount = run.bossesCleared.length;
+      const runSurvivalSec = run.lifespan.ageSeconds;
+      const runDepth = run.deepestDungeonIndex;
+      const runPath = run.legacyPath;
+
+      const nextState: SaveFile = {
         ...state,
         updatedAtUnixSec: event.nowUnixSec,
         meta: nextMeta,
         currentRun: null,
+        achievements: {
+          ...state.achievements,
+          milestoneProgress: {
+            totalBossesFelled: state.achievements.milestoneProgress.totalBossesFelled + runBossCount,
+            totalSurvivalSeconds: state.achievements.milestoneProgress.totalSurvivalSeconds + runSurvivalSec,
+            maxDepthEverReached: Math.max(state.achievements.milestoneProgress.maxDepthEverReached, runDepth),
+            distinctPathsCompleted:
+              runPath && !state.achievements.milestoneProgress.distinctPathsCompleted.includes(runPath)
+                ? [...state.achievements.milestoneProgress.distinctPathsCompleted, runPath]
+                : state.achievements.milestoneProgress.distinctPathsCompleted,
+          },
+        },
       };
 
-      return appendPlaythroughRecord(nextState, playthroughRecord);
+      return checkAndUnlockAchievements(appendPlaythroughRecord(nextState, playthroughRecord));
     }
 
     case "RECONCILE_OFFLINE": {
@@ -1078,6 +1143,154 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           legacyPerks: [...(state.meta.legacyPerks ?? []), event.perkId],
         },
       };
+    }
+
+    case "CREATE_SUBCHARACTER": {
+      if (state.subCharacters.length >= 5) return state; // Max 5 subs
+
+      const newSub: typeof state.subCharacters[number] = {
+        id: `sub_${state.subCharacters.length}`,
+        name: event.name,
+        path: null,
+        meta: {
+          unlockedDungeonIds: ["abandoned_chapel"],
+          unlockedJobIds: ["porter"],
+          discoveredTraitIds: [],
+          discoveredItemIds: [],
+          codexEntries: [],
+          legacyAsh: 0,
+          totalRuns: 0,
+          legacyPath: null,
+          legacyPerks: [],
+        },
+        currentRun: null,
+        automationConfig: {
+          enabled: false,
+          dungeonIds: [],
+          intervalSec: 30,
+          lastAutoRunUnixSec: event.nowUnixSec,
+        },
+        stats: {
+          totalRunsCompleted: 0,
+          totalBossesDefeated: 0,
+          maxDepthReached: 0,
+          totalSurvivalSeconds: 0,
+          ashEarned: 0,
+        },
+        createdAtUnixSec: event.nowUnixSec,
+      };
+
+      return {
+        ...state,
+        subCharacters: [...state.subCharacters, newSub],
+      };
+    }
+
+    case "START_SUBCHARACTER_RUN": {
+      const subIdx = state.subCharacters.findIndex((s) => s.id === event.subCharId);
+      if (subIdx === -1 || state.subCharacters[subIdx].currentRun) return state;
+
+      const sub = state.subCharacters[subIdx];
+      const seed = Math.floor((event.nowUnixSec * 1234567) ^ 0xdeadbeef);
+      const newRun = buildNewRun(seed, event.nowUnixSec, sub.meta);
+
+      const updatedSub = { ...sub, currentRun: newRun };
+      const newSubs = [...state.subCharacters];
+      newSubs[subIdx] = updatedSub;
+
+      return { ...state, subCharacters: newSubs };
+    }
+
+    case "CLAIM_SUBCHARACTER_DEATH": {
+      const subIdx = state.subCharacters.findIndex((s) => s.id === event.subCharId);
+      if (subIdx === -1 || !state.subCharacters[subIdx].currentRun) return state;
+
+      const sub = state.subCharacters[subIdx];
+      const run = sub.currentRun!;
+
+      if (run.alive) return state; // Must be dead
+
+      const ash = computeLegacyAshBreakdown(run);
+      const survivalSec = run.lifespan.ageSeconds;
+      const bossCount = run.bossesCleared.length;
+      const depth = run.deepestDungeonIndex;
+
+      const updatedSub = {
+        ...sub,
+        meta: {
+          ...sub.meta,
+          legacyAsh: sub.meta.legacyAsh + ash.total,
+          totalRuns: sub.meta.totalRuns + 1,
+        },
+        currentRun: null,
+        stats: {
+          totalRunsCompleted: sub.stats.totalRunsCompleted + 1,
+          totalBossesDefeated: sub.stats.totalBossesDefeated + bossCount,
+          maxDepthReached: Math.max(sub.stats.maxDepthReached, depth),
+          totalSurvivalSeconds: sub.stats.totalSurvivalSeconds + survivalSec,
+          ashEarned: sub.stats.ashEarned + ash.total,
+        },
+      };
+
+      const newSubs = [...state.subCharacters];
+      newSubs[subIdx] = updatedSub;
+
+      const updated = {
+        ...state,
+        subCharacters: newSubs,
+        achievements: {
+          ...state.achievements,
+          milestoneProgress: {
+            totalBossesFelled: state.achievements.milestoneProgress.totalBossesFelled + bossCount,
+            totalSurvivalSeconds:
+              state.achievements.milestoneProgress.totalSurvivalSeconds + survivalSec,
+            maxDepthEverReached: Math.max(
+              state.achievements.milestoneProgress.maxDepthEverReached,
+              depth
+            ),
+            distinctPathsCompleted: sub.path && !state.achievements.milestoneProgress.distinctPathsCompleted.includes(sub.path)
+              ? [...state.achievements.milestoneProgress.distinctPathsCompleted, sub.path]
+              : state.achievements.milestoneProgress.distinctPathsCompleted,
+          },
+        },
+      };
+
+      return checkAndUnlockAchievements(updated);
+    }
+
+    case "TOGGLE_SUBCHARACTER_AUTOMATION": {
+      const subIdx = state.subCharacters.findIndex((s) => s.id === event.subCharId);
+      if (subIdx === -1) return state;
+
+      const updatedSub = {
+        ...state.subCharacters[subIdx],
+        automationConfig: {
+          ...state.subCharacters[subIdx].automationConfig,
+          enabled: event.enabled,
+        },
+      };
+
+      const newSubs = [...state.subCharacters];
+      newSubs[subIdx] = updatedSub;
+
+      return { ...state, subCharacters: newSubs };
+    }
+
+    case "UNLOCK_ACHIEVEMENT": {
+      // This is auto-triggered by checkAndUnlockAchievements, so just return state
+      return state;
+    }
+
+    case "AUTO_RUN_SUBCHARACTER": {
+      // Simplified: just prevent action if automation not enabled
+      const subIdx = state.subCharacters.findIndex((s) => s.id === event.subCharId);
+      if (subIdx === -1) return state;
+
+      const sub = state.subCharacters[subIdx];
+      if (!sub.automationConfig.enabled || sub.automationConfig.dungeonIds.length === 0) return state;
+
+      // Sub-character automation is handled in HUD via timer and manual dispatch of events
+      return state;
     }
 
     default:

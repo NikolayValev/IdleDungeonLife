@@ -169,12 +169,67 @@ export interface MetaProgress {
   legacyPerks: string[]; // IDs of purchased permanent perks
 }
 
+// ─── Achievement & Sub-Character Types ───────────────────────────────────────
+
+export interface AchievementDef {
+  id: string; // "boss_50", "survive_1000", "depth_20", etc.
+  title: string; // "Monster Slayer"
+  description: string; // "Defeat 50 bosses across all runs"
+  category: "milestone" | "challenge" | "path";
+  triggerType: "bossCount" | "survivalTime" | "depthReached" | "pathCompleted";
+  triggerValue: number; // e.g., 50 for boss_50
+  reward?: {
+    vitalityBoost?: number; // e.g., 0.05 for +5%
+    essenceRateBoost?: number;
+    goldRateBoost?: number;
+    discoveryRateBoost?: number;
+  };
+}
+
+export interface AchievementTracker {
+  unlockedIds: string[]; // One-time; IDs of achievements player has earned
+  milestoneProgress: {
+    totalBossesFelled: number; // Global across all runs + subs
+    totalSurvivalSeconds: number; // Global cumulative
+    maxDepthEverReached: number; // Global single-run record
+    distinctPathsCompleted: string[]; // "holy", "abyss", "knowledge" completed by any char
+  };
+}
+
+export interface SubCharacterAutomationConfig {
+  enabled: boolean;
+  dungeonIds: string[]; // Which dungeons to cycle through (rotation)
+  intervalSec: number; // Seconds between auto-runs (10-300)
+  lastAutoRunUnixSec: number; // Timestamp of last automated run
+}
+
+export interface SubCharacterStats {
+  totalRunsCompleted: number;
+  totalBossesDefeated: number;
+  maxDepthReached: number;
+  totalSurvivalSeconds: number;
+  ashEarned: number; // Cumulative lifetime ash earned from all deaths
+}
+
+export interface SubCharacter {
+  id: string; // "sub_0", "sub_1", etc.
+  name: string; // Player-assigned name
+  path: "holy" | "abyss" | "knowledge" | null;
+  meta: MetaProgress; // Own legacy progression, independent from main
+  currentRun: RunState | null; // Own active run
+  automationConfig: SubCharacterAutomationConfig;
+  stats: SubCharacterStats;
+  createdAtUnixSec: number;
+}
+
 export interface SaveFile {
   version: number;
   updatedAtUnixSec: number;
   meta: MetaProgress;
   currentRun: RunState | null;
   playthroughArchive: PlaythroughArchive;
+  subCharacters: SubCharacter[]; // Max 5
+  achievements: AchievementTracker;
   showWelcomeBack?: boolean; // transient: set by reconcileOffline, cleared after display
 }
 

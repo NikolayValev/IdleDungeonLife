@@ -34,7 +34,6 @@ export const BALANCE = {
     revealThreshold: 5,     // momentum needed per reveal attempt
   } as const,
   alignmentDriftScale: 1,
-  traitRevealOnDiscoveryChance: 0.3,
   itemBreakEssence: {
     common: 1,
     rare: 3,
@@ -100,6 +99,7 @@ export const BALANCE = {
     legendaryDifficultyWeight: 0.12,
     legendaryAlignmentWeight: 0.08,
     legendaryStatWeight: 40,
+    inventoryCap: 48,
     tables: {
       loot_chapel: {
         baseDropCount: 1,

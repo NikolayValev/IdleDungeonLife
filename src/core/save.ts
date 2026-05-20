@@ -1,5 +1,6 @@
 import type {
   ActiveDungeonState,
+  AchievementTracker,
   BiologicalStage,
   EquipmentState,
   ItemInstance,
@@ -11,7 +12,10 @@ import type {
   PlaythroughTimelineEvent,
   RunState,
   SaveFile,
+  SubCharacter,
 } from "./types";
+import { DUNGEON_REGISTRY } from "../content/dungeons";
+import { ITEM_REGISTRY } from "../content/items";
 
 const SAVE_KEY = "idledungeonlife_save";
 export const SAVE_VERSION = 3;
@@ -53,13 +57,30 @@ function validStage(value: unknown): BiologicalStage {
     : "youth";
 }
 
-function migrateEquipment(value: unknown): EquipmentState {
+function migrateEquipment(value: unknown, inventoryItems: ItemInstance[]): EquipmentState {
   if (!isRecord(value)) return {};
 
+  const inventoryByInstanceId = new Map(inventoryItems.map((item) => [item.instanceId, item]));
+
+  const migrateSlot = (slot: keyof EquipmentState): string | undefined => {
+    const instanceId = typeof value[slot] === "string" ? value[slot] : undefined;
+    if (!instanceId) return undefined;
+
+    const item = inventoryByInstanceId.get(instanceId);
+    if (!item) return undefined;
+
+    const def = ITEM_REGISTRY.get(item.itemId);
+    return def?.slot === slot ? instanceId : undefined;
+  };
+
+  const weapon = migrateSlot("weapon");
+  const armor = migrateSlot("armor");
+  const artifact = migrateSlot("artifact");
+
   return {
-    ...(typeof value.weapon === "string" ? { weapon: value.weapon } : {}),
-    ...(typeof value.armor === "string" ? { armor: value.armor } : {}),
-    ...(typeof value.artifact === "string" ? { artifact: value.artifact } : {}),
+    ...(weapon ? { weapon } : {}),
+    ...(armor ? { armor } : {}),
+    ...(artifact ? { artifact } : {}),
   };
 }
 
@@ -214,6 +235,7 @@ function migrateActiveDungeon(value: unknown): ActiveDungeonState | null {
   if (value === null || value === undefined) return null;
   if (!isRecord(value)) return null;
   if (typeof value.dungeonId !== "string") return null;
+  if (!DUNGEON_REGISTRY.has(value.dungeonId)) return null;
 
   const startedAtUnixSec = finiteNumber(value.startedAtUnixSec, 0);
   const completesAtUnixSec = finiteNumber(value.completesAtUnixSec, startedAtUnixSec);
@@ -240,6 +262,7 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
   }
 
   const talents = isRecord(value.talents) ? value.talents : {};
+  const inventoryItems = migrateInventoryItems(value.inventory.items);
 
   return {
     seed: finiteNumber(value.seed, 0),
@@ -254,14 +277,14 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
     },
     visibleTraitIds: uniqueStrings(value.visibleTraitIds),
     hiddenTraitIds: uniqueStrings(value.hiddenTraitIds),
-      evolvedTraitIds: uniqueStrings(value.evolvedTraitIds),
-      discoveryMomentum: nonNegativeNumber(value.discoveryMomentum, 0),
-      activeLegacyPerkIds: uniqueStrings(value.activeLegacyPerkIds),
-      legacyPath: validLegacyPath(value.legacyPath),
+    evolvedTraitIds: uniqueStrings(value.evolvedTraitIds),
+    discoveryMomentum: nonNegativeNumber(value.discoveryMomentum, 0),
+    activeLegacyPerkIds: uniqueStrings(value.activeLegacyPerkIds),
+    legacyPath: validLegacyPath(value.legacyPath),
     inventory: {
-      items: migrateInventoryItems(value.inventory.items),
+      items: inventoryItems,
     },
-    equipment: migrateEquipment(value.equipment),
+    equipment: migrateEquipment(value.equipment, inventoryItems),
     talents: {
       unlockedNodeIds: uniqueStrings(talents.unlockedNodeIds),
     },
@@ -277,6 +300,70 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
     bossesCleared: uniqueStrings(value.bossesCleared),
     runLog: [],
   };
+}
+
+function migrateAchievements(value: unknown, fallback: AchievementTracker): AchievementTracker {
+  if (!isRecord(value)) return fallback;
+  const m = isRecord(value.milestoneProgress) ? value.milestoneProgress : {};
+  return {
+    unlockedIds: uniqueStrings(value.unlockedIds),
+    milestoneProgress: {
+      totalBossesFelled: nonNegativeNumber(m.totalBossesFelled, 0),
+      totalSurvivalSeconds: nonNegativeNumber(m.totalSurvivalSeconds, 0),
+      maxDepthEverReached: Math.max(0, finiteNumber(m.maxDepthEverReached, 0)),
+      distinctPathsCompleted: uniqueStrings(m.distinctPathsCompleted),
+    },
+  };
+}
+
+function migrateSubCharacter(value: unknown, fallbackNowUnixSec: number): SubCharacter | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string" || typeof value.name !== "string") return null;
+
+  const defaultMeta: MetaProgress = {
+    unlockedDungeonIds: ["abandoned_chapel"],
+    unlockedJobIds: ["porter"],
+    discoveredTraitIds: [],
+    discoveredItemIds: [],
+    codexEntries: [],
+    legacyAsh: 0,
+    totalRuns: 0,
+    legacyPath: null,
+    legacyPerks: [],
+  };
+
+  const autoConf = isRecord(value.automationConfig) ? value.automationConfig : {};
+  const stats = isRecord(value.stats) ? value.stats : {};
+
+  return {
+    id: value.id,
+    name: value.name,
+    path: validLegacyPath(value.path),
+    meta: migrateMeta(value.meta, defaultMeta),
+    currentRun: migrateRun(value.currentRun, fallbackNowUnixSec),
+    automationConfig: {
+      enabled: autoConf.enabled === true,
+      dungeonIds: uniqueStrings(autoConf.dungeonIds),
+      intervalSec: Math.max(10, Math.min(300, finiteNumber(autoConf.intervalSec, 30))),
+      lastAutoRunUnixSec: nonNegativeNumber(autoConf.lastAutoRunUnixSec, fallbackNowUnixSec),
+    },
+    stats: {
+      totalRunsCompleted: nonNegativeNumber(stats.totalRunsCompleted, 0),
+      totalBossesDefeated: nonNegativeNumber(stats.totalBossesDefeated, 0),
+      maxDepthReached: Math.max(0, finiteNumber(stats.maxDepthReached, 0)),
+      totalSurvivalSeconds: nonNegativeNumber(stats.totalSurvivalSeconds, 0),
+      ashEarned: nonNegativeNumber(stats.ashEarned, 0),
+    },
+    createdAtUnixSec: nonNegativeNumber(value.createdAtUnixSec, fallbackNowUnixSec),
+  };
+}
+
+function migrateSubCharacters(value: unknown, fallbackNowUnixSec: number): SubCharacter[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => migrateSubCharacter(item, fallbackNowUnixSec))
+    .filter((s): s is SubCharacter => s !== null)
+    .slice(0, 5);
 }
 
 export function freshSave(nowUnixSec: number): SaveFile {
@@ -296,6 +383,16 @@ export function freshSave(nowUnixSec: number): SaveFile {
     },
     currentRun: null,
     playthroughArchive: emptyPlaythroughArchive(),
+    subCharacters: [],
+    achievements: {
+      unlockedIds: [],
+      milestoneProgress: {
+        totalBossesFelled: 0,
+        totalSurvivalSeconds: 0,
+        maxDepthEverReached: 0,
+        distinctPathsCompleted: [],
+      },
+    },
   };
 }
 
@@ -315,6 +412,8 @@ export function migrateSave(input: SaveFile): SaveFile {
       updatedAtUnixSec,
       base.meta
     ),
+    subCharacters: migrateSubCharacters(inputRecord.subCharacters, updatedAtUnixSec),
+    achievements: migrateAchievements(inputRecord.achievements, base.achievements),
   };
 }
 

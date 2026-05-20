@@ -1,4 +1,4 @@
-import type { Modifier, StatKey, ComputedStats, StatTrace, RunState } from "./types";
+import type { Modifier, StatKey, ComputedStats, StatTrace, RunState, AchievementTracker } from "./types";
 import { evaluateCondition } from "./conditions";
 import type { Tag } from "./types";
 import { TRAIT_REGISTRY } from "../content/traits";
@@ -6,6 +6,7 @@ import { ITEM_REGISTRY } from "../content/items";
 import { TALENT_REGISTRY } from "../content/talents";
 import { JOB_REGISTRY } from "../content/jobs";
 import { LEGACY_PERK_REGISTRY } from "../content/legacyPerks";
+import { ACHIEVEMENT_REGISTRY } from "../content/achievements";
 
 // ─── Base stat defaults ───────────────────────────────────────────────────────
 
@@ -161,8 +162,50 @@ export function collectRunModifiers(run: RunState): Modifier[] {
  */
 export function computeStats(
   run: RunState,
-  context?: { dungeonTags?: Tag[] }
+  context?: { dungeonTags?: Tag[]; achievements?: AchievementTracker }
 ): ComputedStats {
   const mods = collectRunModifiers(run);
+
+  // Apply achievement bonuses
+  if (context?.achievements) {
+    for (const achId of context.achievements.unlockedIds) {
+      const achDef = ACHIEVEMENT_REGISTRY.get(achId);
+      if (!achDef?.reward) continue;
+
+      if (achDef.reward.vitalityBoost) {
+        mods.push({
+          stat: "power",
+          op: "mul",
+          value: 1 + achDef.reward.vitalityBoost,
+          source: `achievement:${achId}`,
+        });
+      }
+      if (achDef.reward.essenceRateBoost) {
+        mods.push({
+          stat: "essenceRate",
+          op: "mul",
+          value: 1 + achDef.reward.essenceRateBoost,
+          source: `achievement:${achId}`,
+        });
+      }
+      if (achDef.reward.goldRateBoost) {
+        mods.push({
+          stat: "goldRate",
+          op: "mul",
+          value: 1 + achDef.reward.goldRateBoost,
+          source: `achievement:${achId}`,
+        });
+      }
+      if (achDef.reward.discoveryRateBoost) {
+        mods.push({
+          stat: "discoveryRate",
+          op: "mul",
+          value: 1 + achDef.reward.discoveryRateBoost,
+          source: `achievement:${achId}`,
+        });
+      }
+    }
+  }
+
   return applyModifiers({ ...BASE_STATS }, mods, run, context);
 }

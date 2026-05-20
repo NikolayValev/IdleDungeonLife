@@ -8,8 +8,9 @@ const TABS = [
   { key: "InventoryScene", label: "Inventory" },
   { key: "TalentsScene", label: "Talents" },
   { key: "CodexScene", label: "Codex" },
+  { key: "SubCharactersScene", label: "Subs" },
+  { key: "AchievementsScene", label: "Achievements" },
 ];
-
 const TOAST_KIND_COLOR: Record<string, string> = {
   boss: COLORS.vitalityLow,
   legendary: "#ffaa44",

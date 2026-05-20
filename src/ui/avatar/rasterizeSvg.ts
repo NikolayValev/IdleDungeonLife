@@ -144,7 +144,7 @@ export function svgToPngBuffer(svg: string, size = 512): Buffer {
     return renderWithResvg(svg, size);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`svgToPngBuffer failed: ${message}`);
+    throw new Error(`svgToPngBuffer failed: ${message}`, { cause: error });
   }
 }
 
