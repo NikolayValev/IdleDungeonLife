@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Idle Dungeon Life — Project Portfolio</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink: #1a1a2a;
+      --sub: #4a4a6a;
+      --line: #d0d0e0;
+      --accent: #5a4fcf;
+      --accent2: #c0392b;
+      --bg: #ffffff;
+      --surface: #f5f5fb;
+      --tag-bg: #ededf8;
+      --tag-fg: #3a3a8a;
+    }
+
+    body {
+      font-family: "Georgia", "Times New Roman", serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.65;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 32px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 2px solid var(--ink);
+      padding-bottom: 24px;
+      margin-bottom: 40px;
+    }
+    header .eyebrow {
+      font-family: "Courier New", monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-bottom: 10px;
+    }
+    header h1 {
+      font-size: 2.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: 14px;
+    }
+    header h1 span { color: var(--accent); }
+    header .tagline {
+      font-size: 1.1rem;
+      color: var(--sub);
+      margin-bottom: 20px;
+    }
+    .links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .links a {
+      display: inline-block;
+      padding: 8px 20px;
+      border: 1.5px solid var(--ink);
+      text-decoration: none;
+      color: var(--ink);
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: background 0.15s, color 0.15s;
+    }
+    .links a.primary { background: var(--ink); color: #fff; }
+    .links a:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── Sections ── */
+    section { margin-bottom: 44px; }
+    h2 {
+      font-size: 0.7rem;
+      font-family: "Courier New", monospace;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--sub);
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      margin-bottom: 18px;
+    }
+    p { margin-bottom: 12px; font-size: 0.97rem; }
+    p:last-child { margin-bottom: 0; }
+
+    /* ── Tech grid ── */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .tech-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 14px 16px;
+    }
+    .tech-card .tech-name {
+      font-family: "Courier New", monospace;
+      font-size: 0.82rem;
+      font-weight: bold;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .tech-card .tech-role {
+      font-size: 0.82rem;
+      color: var(--sub);
+    }
+
+    /* ── Feature list ── */
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .feature { padding-left: 16px; border-left: 2px solid var(--accent); }
+    .feature strong { display: block; font-size: 0.92rem; margin-bottom: 4px; }
+    .feature p { font-size: 0.85rem; color: var(--sub); margin: 0; }
+
+    /* ── Architecture ── */
+    .arch-list { list-style: none; }
+    .arch-list li {
+      display: flex;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.92rem;
+    }
+    .arch-list li:last-child { border-bottom: none; }
+    .arch-list .label {
+      font-family: "Courier New", monospace;
+      font-size: 0.78rem;
+      color: var(--accent);
+      white-space: nowrap;
+      min-width: 120px;
+      padding-top: 2px;
+    }
+
+    /* ── Tags ── */
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .tag {
+      background: var(--tag-bg);
+      color: var(--tag-fg);
+      font-family: "Courier New", monospace;
+      font-size: 0.72rem;
+      padding: 3px 9px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 56px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+      font-size: 0.82rem;
+      color: var(--sub);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ── Print ── */
+    @media print {
+      body { padding: 0; font-size: 10pt; max-width: 100%; }
+      header { page-break-after: avoid; }
+      section { page-break-inside: avoid; }
+      .links a { border: 1pt solid #000; }
+      .links a.primary { background: none; color: #000; }
+      .features { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 2rem; }
+      .features { grid-template-columns: 1fr; }
+      .tech-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Personal Project &mdash; 2025&ndash;2026 &mdash; Nikolay Valev</p>
+  <h1>Idle <span>Dungeon</span> Life</h1>
+  <p class="tagline">A browser &amp; mobile idle RPG built entirely in TypeScript &mdash; pure reducer state, headless simulation, and Playwright test coverage.</p>
+  <div class="links">
+    <a class="primary" href="/">&#9654; Play the Game</a>
+    <a href="https://github.com/nikolayvalev/IdleDungeonLife" target="_blank">GitHub Repository</a>
+  </div>
+</header>
+
+<section>
+  <h2>About</h2>
+  <p>
+    Idle Dungeon Life is a fully self-authored idle RPG where players send a procedurally
+    characterized adventurer into increasingly dangerous dungeons, manage resources and
+    equipment, and carry permanent "legacy ash" progress across deaths and rebirths.
+  </p>
+  <p>
+    The entire game state is managed through a pure, event-sourced reducer — no React, no
+    Vue, no external state library — keeping the core completely decoupled from the Phaser 3
+    rendering layer and testable in headless Node.js simulations. The project targets both
+    desktop browsers and Android/iOS via Capacitor.
+  </p>
+</section>
+
+<section>
+  <h2>Tech Stack</h2>
+  <div class="tech-grid">
+    <div class="tech-card">
+      <span class="tech-name">TypeScript 5.9</span>
+      <span class="tech-role">Language — strict mode throughout</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">Phaser 3.90</span>
+      <span class="tech-role">2D game engine &amp; scene management</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">Vite 8</span>
+      <span class="tech-role">Bundler, HMR, manual chunk splitting</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">Vitest</span>
+      <span class="tech-role">68 unit tests, TypeScript-native</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">Playwright</span>
+      <span class="tech-role">End-to-end browser automation</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">Capacitor 8</span>
+      <span class="tech-role">Android &amp; iOS packaging</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">ESLint + Prettier</span>
+      <span class="tech-role">Static analysis &amp; formatting</span>
+    </div>
+    <div class="tech-card">
+      <span class="tech-name">Node.js sim</span>
+      <span class="tech-role">Headless balance &amp; batch testing</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Architecture Highlights</h2>
+  <ul class="arch-list">
+    <li>
+      <span class="label">Pure Reducer</span>
+      <span>All game state flows through a single <code>reduceGame(state, event) → state</code> function. No direct mutation, no side effects inside the reducer. Every feature is a new event type.</span>
+    </li>
+    <li>
+      <span class="label">Headless Sim</span>
+      <span>A full simulation layer under <code>src/sim/</code> runs the game engine without Phaser to batch-test balance profiles, generate HTML reports, and verify determinism across seeds.</span>
+    </li>
+    <li>
+      <span class="label">Save Migration</span>
+      <span>Versioned save format (v3) with typed migration helpers that validate and normalise every field on load, ensuring backward-compat across all deployed versions.</span>
+    </li>
+    <li>
+      <span class="label">Seeded RNG</span>
+      <span>All random outcomes (loot, traits, reveals) use a seeded <code>SeededRandomProvider</code> derived from the run seed, making every playthrough fully reproducible.</span>
+    </li>
+    <li>
+      <span class="label">Layered Testing</span>
+      <span>68 Vitest unit tests cover the reducer, save migration, offline reconciliation, avatar generation, and headless simulation. Playwright e2e specs cover the full run lifecycle in a live browser.</span>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Key Features</h2>
+  <div class="features">
+    <div class="feature">
+      <strong>Trait System with Evolution</strong>
+      <p>Hidden traits reveal at age, alignment, and dungeon-completion thresholds. Traits evolve mid-run, stacking modifier layers on stats.</p>
+    </div>
+    <div class="feature">
+      <strong>Legacy Ash &amp; Prestige</strong>
+      <p>Each death awards ash based on depth, survival time, bosses, and discoveries. Ash unlocks dungeons, jobs, talents, and permanent perks.</p>
+    </div>
+    <div class="feature">
+      <strong>Achievement System</strong>
+      <p>Milestone-gated achievements (bosses felled, survival time, paths completed) unlock permanent stat bonuses applied live in every tick.</p>
+    </div>
+    <div class="feature">
+      <strong>Three Legacy Paths</strong>
+      <p>Holy, Abyss, and Knowledge paths each unlock a 7-node talent branch and a dedicated perk tree, enabling distinct long-term builds.</p>
+    </div>
+    <div class="feature">
+      <strong>50 Items, 16 Traits, 15 Dungeons</strong>
+      <p>Rich authored content with conditional modifiers, alignment gating, tag-based affinity, and rarity-weighted loot tables per dungeon.</p>
+    </div>
+    <div class="feature">
+      <strong>Sub-Characters</strong>
+      <p>Up to five independent sub-characters, each with their own meta progression, run state, and automation configuration.</p>
+    </div>
+    <div class="feature">
+      <strong>Offline Progression</strong>
+      <p>Up to 24 hours of offline play is reconciled deterministically on load — dungeons complete, traits reveal, and resources accumulate.</p>
+    </div>
+    <div class="feature">
+      <strong>Avatar Generator</strong>
+      <p>Procedural SVG character portraits driven by alignment, vitality, equipped item tags, and run seed. Rasterised to PNG atlas for Phaser.</p>
+    </div>
+  </div>
+  <div class="tags" style="margin-top: 24px;">
+    <span class="tag">idle-rpg</span>
+    <span class="tag">game-dev</span>
+    <span class="tag">typescript</span>
+    <span class="tag">phaser-3</span>
+    <span class="tag">event-sourcing</span>
+    <span class="tag">pure-reducer</span>
+    <span class="tag">headless-simulation</span>
+    <span class="tag">playwright</span>
+    <span class="tag">capacitor</span>
+    <span class="tag">mobile</span>
+  </div>
+</section>
+
+<footer>
+  <span>Nikolay Valev &mdash; nikolaivalev@gmail.com</span>
+  <span>Live at <strong>dungeonlive.nikolai.com</strong></span>
+</footer>
+
+</body>
+</html>
