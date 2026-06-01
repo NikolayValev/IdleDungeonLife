@@ -1,5 +1,29 @@
 Original prompt: help me run this
 
+## Latest Session: Mobile fixes, sub-character gating, repo cleanup (2026-05-31)
+
+### Mobile build
+- Fixed the canvas overflowing the device safe area. `#game-container` now pins
+  to the safe region with `position: fixed` + `env(safe-area-inset-*)` offsets
+  instead of padding, which Phaser's `Scale.FIT` ignored — the top HUD was
+  clipped and the bottom tab row sat under the home indicator. Verified the
+  canvas shrinks within simulated insets and bottom-row tabs become tappable.
+
+### Sub-characters
+- Gated the feature behind clearing the final dungeon (The Wound). Added the
+  persistent `subCharactersUnlocked` flag (`SaveFile`), set in `COMPLETE_DUNGEON`
+  via the new `FINAL_DUNGEON` lookup, with a milestone toast on unlock and a
+  clear locked panel in `SubCharactersScene`. `CREATE_SUBCHARACTER` rejects while
+  locked; existing saves are backfilled in `migrateSave`.
+- Added `DEBUG_SET_SUBCHARACTERS_UNLOCKED` + `Ctrl+S` debug toggle for testing.
+
+### Tests & cleanup
+- New `tests/e2e/playability.spec.ts` (all tabs render error-free; full
+  lock → unlock → recruit → automate lifecycle) plus reducer unit coverage.
+- Removed tracked dev scratch (`artifacts/`, `test-*.txt` dumps, stray `*.log`),
+  deleted Vite scaffold leftovers (`counter.ts`, `step.ts`, template assets),
+  added a `README.md`, and consolidated the balancing docs into `BALANCING.md`.
+
 ## Latest Session: Phase 4 + Balancing Mode (2026-05-01)
 
 ### Phase 4: Offline Gameplay & Welcome Back

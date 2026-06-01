@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -11,28 +14,38 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Space+Mono&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Space+Mono&display=swap"
+      rel="stylesheet"
+    />
     <title>Idle Dungeon Life</title>
     <style>
       /* ── Design tokens ─────────────────────────────────────────────── */
       :root {
-        --bg:           #0d0d0d;
-        --bg-game:      #0a0a0a;
-        --gold:         #c8a855;
-        --gold-dim:     #6a5520;
-        --gold-glow:    rgba(200,168,85,.18);
-        --text:         #e8e0cc;
-        --text-muted:   #6a6050;
-        --sep:          #1a1a28;
-        --card-bg:      #0f0f18;
-        --card-border:  #1c1c2a;
+        --bg: #0d0d0d;
+        --bg-game: #0a0a0a;
+        --gold: #c8a855;
+        --gold-dim: #6a5520;
+        --gold-glow: rgba(200, 168, 85, 0.18);
+        --text: #e8e0cc;
+        --text-muted: #6a6050;
+        --sep: #1a1a28;
+        --card-bg: #0f0f18;
+        --card-border: #1c1c2a;
       }
 
       /* ── Reset ─────────────────────────────────────────────────────── */
-      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
       /* ── Mobile base: game fills viewport ──────────────────────────── */
-      html, body {
+      html,
+      body {
         height: 100%;
         width: 100%;
         background: var(--bg);
@@ -40,18 +53,23 @@
         touch-action: none;
       }
 
-      #left-panel { display: none; }
+      #left-panel {
+        display: none;
+      }
 
+      /* Box is pinned to the safe area via inset offsets (NOT padding) so
+         Phaser's FIT scale measures the safe region and shrinks the canvas
+         into it. Padding is invisible to getBoundingClientRect-based sizing,
+         which makes the canvas overflow and clip the top/bottom bars. */
       #game-container {
-        width: 100%;
-        height: 100%;
+        position: fixed;
+        top: env(safe-area-inset-top);
+        bottom: env(safe-area-inset-bottom);
+        left: env(safe-area-inset-left);
+        right: env(safe-area-inset-right);
         display: flex;
         align-items: center;
         justify-content: center;
-        padding-top:    env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left:   env(safe-area-inset-left);
-        padding-right:  env(safe-area-inset-right);
       }
 
       canvas {
@@ -65,7 +83,8 @@
 
       /* ── Desktop: two-column split ─────────────────────────────────── */
       @media (min-width: 900px) {
-        html, body {
+        html,
+        body {
           touch-action: auto;
           overflow: hidden;
         }
@@ -92,34 +111,37 @@
 
         /* Noise layer */
         #left-panel::before {
-          content: '';
+          content: "";
           position: absolute;
           inset: 0;
           pointer-events: none;
-          background-image:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
           background-size: 300px 300px;
           z-index: 0;
         }
 
         /* Animated border-right glow */
         #left-panel::after {
-          content: '';
+          content: "";
           position: absolute;
           right: -1px;
           top: 15%;
           height: 70%;
           width: 1px;
-          background: linear-gradient(to bottom,
+          background: linear-gradient(
+            to bottom,
             transparent,
             var(--gold-dim) 40%,
             var(--gold-dim) 60%,
-            transparent);
+            transparent
+          );
           animation: borderGlow 5s ease-in-out infinite;
           z-index: 2;
         }
 
         #game-container {
+          position: static;
+          inset: auto;
           width: 460px;
           flex-shrink: 0;
           height: 100vh;
@@ -146,17 +168,17 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        font-family: 'Space Mono', monospace;
+        font-family: "Space Mono", monospace;
         font-size: 9.5px;
         letter-spacing: 0.32em;
         text-transform: uppercase;
         color: var(--gold);
         margin-bottom: 22px;
         opacity: 0;
-        animation: riseIn .55s ease forwards .1s;
+        animation: riseIn 0.55s ease forwards 0.1s;
       }
       .eyebrow::before {
-        content: '';
+        content: "";
         display: block;
         width: 22px;
         height: 1px;
@@ -166,38 +188,40 @@
 
       /* Title */
       .game-title {
-        font-family: 'Cinzel Decorative', serif;
+        font-family: "Cinzel Decorative", serif;
         font-weight: 700;
         font-size: clamp(1.7rem, 3.4vw, 2.6rem);
         line-height: 1.12;
         color: var(--text);
         margin-bottom: 10px;
         opacity: 0;
-        animation: riseIn .6s ease forwards .25s;
+        animation: riseIn 0.6s ease forwards 0.25s;
       }
-      .game-title .accent { color: var(--gold); }
+      .game-title .accent {
+        color: var(--gold);
+      }
 
       /* Tagline */
       .tagline {
-        font-family: 'Cormorant Garamond', serif;
+        font-family: "Cormorant Garamond", serif;
         font-style: italic;
         font-size: 1.2rem;
         color: var(--text-muted);
         letter-spacing: 0.04em;
         margin-bottom: 30px;
         opacity: 0;
-        animation: riseIn .6s ease forwards .4s;
+        animation: riseIn 0.6s ease forwards 0.4s;
       }
 
       /* Description */
       .description {
-        font-family: 'Cormorant Garamond', serif;
+        font-family: "Cormorant Garamond", serif;
         font-size: 1.08rem;
         line-height: 1.8;
         color: var(--text);
         margin-bottom: 36px;
         opacity: 0;
-        animation: riseIn .65s ease forwards .55s;
+        animation: riseIn 0.65s ease forwards 0.55s;
       }
 
       /* Feature 2×2 grid */
@@ -207,14 +231,16 @@
         gap: 10px;
         margin-bottom: 38px;
         opacity: 0;
-        animation: riseIn .65s ease forwards .7s;
+        animation: riseIn 0.65s ease forwards 0.7s;
       }
 
       .feature {
         background: var(--card-bg);
         border: 1px solid var(--card-border);
         padding: 16px 18px 18px;
-        transition: border-color .2s, background .2s;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
         cursor: default;
       }
       .feature:hover {
@@ -224,7 +250,7 @@
 
       .feature-name {
         display: block;
-        font-family: 'Space Mono', monospace;
+        font-family: "Space Mono", monospace;
         font-size: 8.5px;
         letter-spacing: 0.2em;
         text-transform: uppercase;
@@ -232,8 +258,8 @@
         margin-bottom: 7px;
       }
       .feature-desc {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: .9rem;
+        font-family: "Cormorant Garamond", serif;
+        font-size: 0.9rem;
         line-height: 1.55;
         color: var(--text-muted);
       }
@@ -245,10 +271,11 @@
         gap: 14px;
         margin-bottom: 22px;
         opacity: 0;
-        animation: riseIn .6s ease forwards .85s;
+        animation: riseIn 0.6s ease forwards 0.85s;
       }
-      .rule::before, .rule::after {
-        content: '';
+      .rule::before,
+      .rule::after {
+        content: "";
         flex: 1;
         height: 1px;
         background: var(--sep);
@@ -257,7 +284,7 @@
         font-size: 13px;
         color: var(--gold-dim);
         line-height: 1;
-        letter-spacing: .2em;
+        letter-spacing: 0.2em;
       }
 
       /* Attribution */
@@ -265,68 +292,91 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        font-family: 'Space Mono', monospace;
+        font-family: "Space Mono", monospace;
         font-size: 9.5px;
-        letter-spacing: .1em;
+        letter-spacing: 0.1em;
         color: var(--text-muted);
         opacity: 0;
-        animation: riseIn .55s ease forwards 1s;
+        animation: riseIn 0.55s ease forwards 1s;
       }
       .attribution a {
         color: var(--gold-dim);
         text-decoration: none;
-        transition: color .2s;
+        transition: color 0.2s;
       }
-      .attribution a:hover { color: var(--gold); }
+      .attribution a:hover {
+        color: var(--gold);
+      }
 
       /* ── Keyframes ─────────────────────────────────────────────────── */
       @keyframes riseIn {
-        from { opacity: 0; transform: translateY(14px); }
-        to   { opacity: 1; transform: translateY(0);    }
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       @keyframes borderGlow {
-        0%, 100% { opacity: .25; }
-        50%       { opacity: .7;  }
+        0%,
+        100% {
+          opacity: 0.25;
+        }
+        50% {
+          opacity: 0.7;
+        }
       }
     </style>
   </head>
   <body>
-
     <div id="left-panel">
       <div class="panel-inner">
-
         <p class="eyebrow">An Idle RPG</p>
 
         <h1 class="game-title">
-          Idle Dungeon<br>
+          Idle Dungeon<br />
           <span class="accent">Life</span>
         </h1>
 
         <p class="tagline">Every character lives once.</p>
 
         <p class="description">
-          Send your adventurer into ancient dungeons — they age, collect traits, and push
-          deeper until time runs out. When they fall, legacy ash persists across deaths:
-          permanent unlocks, chosen paths, and a world that remembers every run.
+          Send your adventurer into ancient dungeons — they age, collect traits, and push deeper
+          until time runs out. When they fall, legacy ash persists across deaths: permanent unlocks,
+          chosen paths, and a world that remembers every run.
         </p>
 
         <div class="features">
           <div class="feature">
             <span class="feature-name">Traits &amp; Evolution</span>
-            <p class="feature-desc">Hidden aspects surface as your character ages. Some evolve mid-run, permanently reshaping your build.</p>
+            <p class="feature-desc">
+              Hidden aspects surface as your character ages. Some evolve mid-run, permanently
+              reshaping your build.
+            </p>
           </div>
           <div class="feature">
             <span class="feature-name">Dungeon Depths</span>
-            <p class="feature-desc">15 locations from the Abandoned Chapel to The Wound — each harder, richer, and more lethal.</p>
+            <p class="feature-desc">
+              15 locations from the Abandoned Chapel to The Wound — each harder, richer, and more
+              lethal.
+            </p>
           </div>
           <div class="feature">
             <span class="feature-name">Life &amp; Death</span>
-            <p class="feature-desc">Your adventurer ages in real time. Death is progress — legacy ash funds everything that follows.</p>
+            <p class="feature-desc">
+              Your adventurer ages in real time. Death is progress — legacy ash funds everything
+              that follows.
+            </p>
           </div>
           <div class="feature">
             <span class="feature-name">Legacy Paths</span>
-            <p class="feature-desc">Holy, Abyss, or Knowledge. Each path unlocks a talent tree and perk line spanning multiple lives.</p>
+            <p class="feature-desc">
+              Holy, Abyss, or Knowledge. Each path unlocks a talent tree and perk line spanning
+              multiple lives.
+            </p>
           </div>
         </div>
 
@@ -338,7 +388,6 @@
           <span>by Nikolay Valev</span>
           <a href="/about">project overview →</a>
         </div>
-
       </div>
     </div>
 

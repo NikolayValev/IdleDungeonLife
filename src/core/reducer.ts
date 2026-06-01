@@ -1,4 +1,13 @@
-﻿import type { SaveFile, RunState, ItemInstance, Tag, RunLogEntry, RunLogKind, AchievementTracker } from "./types";
+﻿import type {
+  SaveFile,
+  RunState,
+  ItemInstance,
+  Tag,
+  RunLogEntry,
+  RunLogKind,
+  AchievementTracker,
+  MetaProgress,
+} from "./types";
 import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
 import { tickLifespan, applyDungeonWear } from "./lifespan";
@@ -9,14 +18,13 @@ import { resetAnalyticsTimeline, snapshotAnalyticsTimeline, trackEvent } from ".
 import { appendPlaythroughRecord } from "./save";
 import { TRAIT_REGISTRY, TRAITS } from "../content/traits";
 import { JOB_REGISTRY } from "../content/jobs";
-import { DUNGEON_REGISTRY } from "../content/dungeons";
+import { DUNGEON_REGISTRY, FINAL_DUNGEON } from "../content/dungeons";
 import { TALENT_REGISTRY } from "../content/talents";
 import { LOOT_TABLE_REGISTRY } from "../content/lootTables";
 import { ITEM_REGISTRY } from "../content/items";
 import { BALANCE } from "../content/balance";
 import { LEGACY_PERK_REGISTRY, canPurchasePerk } from "../content/legacyPerks";
 import { ACHIEVEMENT_REGISTRY } from "../content/achievements";
-import type { MetaProgress } from "./types";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -27,10 +35,9 @@ function makeInstanceId(
   dropIndex: number,
   itemId: string
 ): string {
-  return `inst_${deriveSeed(
-    seed,
-    `${lootTableId}:${rollIndex}:${dropIndex}:${itemId}`
-  ).toString(16)}`;
+  return `inst_${deriveSeed(seed, `${lootTableId}:${rollIndex}:${dropIndex}:${itemId}`).toString(
+    16
+  )}`;
 }
 
 function makeCodexEntryId(kind: "item" | "trait", id: string): string {
@@ -54,7 +61,11 @@ function resourceMultiplier(value: number): number {
 function shouldRevealTrait(
   run: RunState,
   triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached",
-  rule: { triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached"; value?: number; dungeonTag?: Tag },
+  rule: {
+    triggerEvent: "dungeonCompleted" | "alignmentThreshold" | "ageReached";
+    value?: number;
+    dungeonTag?: Tag;
+  },
   dungeonTags?: Tag[]
 ): boolean {
   if (rule.triggerEvent !== triggerEvent) {
@@ -133,9 +144,10 @@ function evolveTraitsForTrigger(
 
 // ─── Starting Traits ─────────────────────────────────────────────────────────
 
-function generateStartingTraits(
-  seed: number
-): { visibleTraitIds: string[]; hiddenTraitIds: string[] } {
+function generateStartingTraits(seed: number): {
+  visibleTraitIds: string[];
+  hiddenTraitIds: string[];
+} {
   const rng = new SeededRandomProvider(deriveSeed(seed, "traits"));
   const pool = [...TRAITS];
 
@@ -191,7 +203,9 @@ function rollLoot(
   const negativeAlignment = Math.max(0, -run.alignment.holyUnholy);
   const alignmentSynergy =
     (dungeonTags.includes("holy") || dungeonTags.includes("shrine") ? positiveAlignment : 0) +
-    (dungeonTags.includes("unholy") || dungeonTags.includes("abyss") || dungeonTags.includes("decay")
+    (dungeonTags.includes("unholy") ||
+    dungeonTags.includes("abyss") ||
+    dungeonTags.includes("decay")
       ? negativeAlignment
       : 0) +
     (dungeonTags.includes("fate") ? Math.abs(run.alignment.holyUnholy) * 0.35 : 0);
@@ -210,17 +224,21 @@ function rollLoot(
         alignmentSynergy * BALANCE.loot.legendaryAlignmentWeight +
         stats.legendaryDropRate * BALANCE.loot.legendaryStatWeight,
     };
-    const rarityFilter = rng.weightedPick(
-      ["common", "rare", "legendary"] as const,
-      [rarityWeights.common, rarityWeights.rare, rarityWeights.legendary]
-    );
+    const rarityFilter = rng.weightedPick(["common", "rare", "legendary"] as const, [
+      rarityWeights.common,
+      rarityWeights.rare,
+      rarityWeights.legendary,
+    ]);
     const filtered = table.entries.filter((e) => {
       const def = ITEM_REGISTRY.get(e.itemId);
       return def?.rarity === rarityFilter;
     });
 
     const pool = filtered.length > 0 ? filtered : table.entries;
-    const chosen = rng.weightedPick(pool, pool.map((e) => e.weight));
+    const chosen = rng.weightedPick(
+      pool,
+      pool.map((e) => e.weight)
+    );
     items.push({
       instanceId: makeInstanceId(seed, lootTableId, rollIndex, i, chosen.itemId),
       itemId: chosen.itemId,
@@ -237,7 +255,10 @@ const RUN_LOG_MAX = 50;
 function pushLog(run: RunState, kind: RunLogKind, message: string, timestampSec: number): RunState {
   const entry: RunLogEntry = { kind, message, timestampSec };
   const newLog = [...(run.runLog ?? []), entry];
-  return { ...run, runLog: newLog.length > RUN_LOG_MAX ? newLog.slice(newLog.length - RUN_LOG_MAX) : newLog };
+  return {
+    ...run,
+    runLog: newLog.length > RUN_LOG_MAX ? newLog.slice(newLog.length - RUN_LOG_MAX) : newLog,
+  };
 }
 
 // ─── Run Builder ─────────────────────────────────────────────────────────────
@@ -303,20 +324,15 @@ function applyTick(run: RunState, nowUnixSec: number, achievements?: Achievement
     const job = JOB_REGISTRY.get(updated.currentJobId);
     if (job) {
       const goldMultiplier =
-        resourceMultiplier(stats.jobOutputMultiplier) *
-        resourceMultiplier(stats.goldRate);
+        resourceMultiplier(stats.jobOutputMultiplier) * resourceMultiplier(stats.goldRate);
       const essenceMultiplier =
-        resourceMultiplier(stats.jobOutputMultiplier) *
-        resourceMultiplier(stats.essenceRate);
+        resourceMultiplier(stats.jobOutputMultiplier) * resourceMultiplier(stats.essenceRate);
       updated = {
         ...updated,
         resources: {
-          gold:
-            updated.resources.gold +
-            job.baseGoldPerSec * goldMultiplier * elapsed,
+          gold: updated.resources.gold + job.baseGoldPerSec * goldMultiplier * elapsed,
           essence:
-            updated.resources.essence +
-            (job.baseEssencePerSec ?? 0) * essenceMultiplier * elapsed,
+            updated.resources.essence + (job.baseEssencePerSec ?? 0) * essenceMultiplier * elapsed,
         },
       };
     }
@@ -351,7 +367,8 @@ function applyDiscoveryMomentumReveals(
   const prevBracket = Math.floor(run.discoveryMomentum / threshold);
   const newBracket = Math.floor(newMomentum / threshold);
   const reveals = newBracket - prevBracket;
-  if (reveals <= 0) return { run: { ...run, discoveryMomentum: newMomentum }, revealedTraitIds: [] };
+  if (reveals <= 0)
+    return { run: { ...run, discoveryMomentum: newMomentum }, revealedTraitIds: [] };
 
   let current = { ...run, discoveryMomentum: newMomentum };
   const allRevealedIds: string[] = [];
@@ -425,8 +442,7 @@ function checkAndUnlockAchievements(save: SaveFile): SaveFile {
 export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
   switch (event.type) {
     case "START_NEW_RUN": {
-      const seed =
-        event.seed ?? Math.floor((event.nowUnixSec * 1234567) ^ 0xdeadbeef);
+      const seed = event.seed ?? Math.floor((event.nowUnixSec * 1234567) ^ 0xdeadbeef);
       const run = buildNewRun(seed, event.nowUnixSec, state.meta);
 
       resetAnalyticsTimeline();
@@ -454,7 +470,11 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const updated = applyTick(state.currentRun, event.nowUnixSec, state.achievements);
       const ageReveal = revealTraitsForTrigger(updated, "ageReached");
       const ageEvolve = evolveTraitsForTrigger(
-        { ...updated, visibleTraitIds: ageReveal.visibleTraitIds, hiddenTraitIds: ageReveal.hiddenTraitIds },
+        {
+          ...updated,
+          visibleTraitIds: ageReveal.visibleTraitIds,
+          hiddenTraitIds: ageReveal.hiddenTraitIds,
+        },
         "ageReached"
       );
 
@@ -465,7 +485,12 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const rawMomentum = (updated.discoveryMomentum ?? 0) + momentumGain;
 
       const momentumResult = applyDiscoveryMomentumReveals(
-        { ...updated, visibleTraitIds: ageReveal.visibleTraitIds, hiddenTraitIds: ageReveal.hiddenTraitIds, evolvedTraitIds: ageEvolve.evolvedTraitIds },
+        {
+          ...updated,
+          visibleTraitIds: ageReveal.visibleTraitIds,
+          hiddenTraitIds: ageReveal.hiddenTraitIds,
+          evolvedTraitIds: ageEvolve.evolvedTraitIds,
+        },
         rawMomentum
       );
 
@@ -489,19 +514,40 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const prevVitality = state.currentRun.lifespan.vitality;
       const newVitality = tickFinalRun.lifespan.vitality;
       if (prevVitality > 20 && newVitality <= 20) {
-        tickFinalRun = pushLog(tickFinalRun, "death_warning", "Your body falters. The end draws near.", event.nowUnixSec);
+        tickFinalRun = pushLog(
+          tickFinalRun,
+          "death_warning",
+          "Your body falters. The end draws near.",
+          event.nowUnixSec
+        );
       } else if (prevVitality > 10 && newVitality <= 10) {
-        tickFinalRun = pushLog(tickFinalRun, "death_warning", "Vitality critical. You are nearly spent.", event.nowUnixSec);
+        tickFinalRun = pushLog(
+          tickFinalRun,
+          "death_warning",
+          "Vitality critical. You are nearly spent.",
+          event.nowUnixSec
+        );
       }
       for (const traitId of allRevealedIds) {
         const def = TRAIT_REGISTRY.get(traitId);
-        if (def) tickFinalRun = pushLog(tickFinalRun, "trait_reveal", `A new aspect awakens: ${def.name}`, event.nowUnixSec);
+        if (def)
+          tickFinalRun = pushLog(
+            tickFinalRun,
+            "trait_reveal",
+            `A new aspect awakens: ${def.name}`,
+            event.nowUnixSec
+          );
       }
       for (const traitId of ageEvolve.newlyEvolvedIds) {
         const def = TRAIT_REGISTRY.get(traitId);
         if (def) {
           const evolvedName = def.evolutionName ?? def.name;
-          tickFinalRun = pushLog(tickFinalRun, "trait_evolved", `[Evolution] ${def.name} -> ${evolvedName}`, event.nowUnixSec);
+          tickFinalRun = pushLog(
+            tickFinalRun,
+            "trait_evolved",
+            `[Evolution] ${def.name} -> ${evolvedName}`,
+            event.nowUnixSec
+          );
         }
       }
 
@@ -554,12 +600,10 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       if (!dungeon) return state;
       if (state.meta.unlockedDungeonIds.includes(event.dungeonId)) return state;
       const cost = dungeon.unlockRequirement?.legacyAsh ?? 0;
-            // Check traitDiscovered gate
-            if (dungeon.unlockRequirement?.traitDiscovered) {
-              if (!state.meta.discoveredTraitIds.includes(dungeon.unlockRequirement.traitDiscovered)) {
-                return state;
-              }
-            }
+      const requiredTrait = dungeon.unlockRequirement?.traitDiscovered;
+      if (requiredTrait && !state.meta.discoveredTraitIds.includes(requiredTrait)) {
+        return state;
+      }
       if (state.meta.legacyAsh < cost) return state;
 
       return {
@@ -613,7 +657,10 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const dungeon = DUNGEON_REGISTRY.get(activeDungeon.dungeonId);
       if (!dungeon) return state;
 
-      const stats = computeStats(state.currentRun, { dungeonTags: dungeon.tags, achievements: state.achievements });
+      const stats = computeStats(state.currentRun, {
+        dungeonTags: dungeon.tags,
+        achievements: state.achievements,
+      });
       const score = computeDungeonScore(state.currentRun, dungeon.tags);
       const outcome = resolveDungeonOutcome(score, dungeon.difficulty);
 
@@ -674,11 +721,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         alignment: { holyUnholy: newAlignment },
         lifespan: newLifespan,
       };
-      const dungeonReveal = revealTraitsForTrigger(
-        revealBaseRun,
-        "dungeonCompleted",
-        dungeon.tags
-      );
+      const dungeonReveal = revealTraitsForTrigger(revealBaseRun, "dungeonCompleted", dungeon.tags);
       const alignmentReveal = revealTraitsForTrigger(
         {
           ...revealBaseRun,
@@ -697,13 +740,13 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       }
 
       // Track depth
-      const newDepth = Math.max(
-        state.currentRun.deepestDungeonIndex,
-        dungeon.depthIndex
-      );
+      const newDepth = Math.max(state.currentRun.deepestDungeonIndex, dungeon.depthIndex);
       const newBossesCleared = isBoss
         ? [...new Set([...state.currentRun.bossesCleared, dungeon.id])]
         : state.currentRun.bossesCleared;
+
+      // Clearing the final dungeon with the first character unlocks sub-characters.
+      const newlyUnlockedSubs = dungeon.id === FINAL_DUNGEON.id && !state.subCharactersUnlocked;
 
       trackEvent("dungeon_completed", {
         dungeonId: dungeon.id,
@@ -753,6 +796,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
       return {
         ...state,
+        subCharactersUnlocked: state.subCharactersUnlocked || newlyUnlockedSubs,
         meta: {
           ...state.meta,
           discoveredItemIds: [...newDiscoveries],
@@ -769,10 +813,9 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             alignment: { holyUnholy: newAlignment },
             evolvedTraitIds: finalEvolvedTraitIds,
             inventory: {
-              items: [
-                ...state.currentRun.inventory.items,
-                ...loot.items,
-              ].slice(-BALANCE.loot.inventoryCap),
+              items: [...state.currentRun.inventory.items, ...loot.items].slice(
+                -BALANCE.loot.inventoryCap
+              ),
             },
             resources: {
               gold: state.currentRun.resources.gold + goldReward,
@@ -786,20 +829,50 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           if (dungeon.flavor) {
             const flavorArr = dungeon.flavor[outcome];
             if (flavorArr?.length) {
-              const flavorRng = new SeededRandomProvider(deriveSeed(state.currentRun.seed, `flavor_${state.currentRun.totalDungeonsCompleted}`));
-              completedRun = pushLog(completedRun, "dungeon", flavorArr[flavorRng.nextInt(0, flavorArr.length - 1)], event.nowUnixSec);
+              const flavorRng = new SeededRandomProvider(
+                deriveSeed(
+                  state.currentRun.seed,
+                  `flavor_${state.currentRun.totalDungeonsCompleted}`
+                )
+              );
+              completedRun = pushLog(
+                completedRun,
+                "dungeon",
+                flavorArr[flavorRng.nextInt(0, flavorArr.length - 1)],
+                event.nowUnixSec
+              );
             }
           }
           // Legendary drops
           for (const inst of loot.items) {
             const itemDef = ITEM_REGISTRY.get(inst.itemId);
             if (itemDef?.rarity === "legendary") {
-              completedRun = pushLog(completedRun, "legendary", `A legendary relic surfaces: ${itemDef.name}`, event.nowUnixSec);
+              completedRun = pushLog(
+                completedRun,
+                "legendary",
+                `A legendary relic surfaces: ${itemDef.name}`,
+                event.nowUnixSec
+              );
             }
+          }
+          // Sub-characters unlocked by clearing the final dungeon. Pushed before
+          // the boss-cleared line so the HUD surfaces this headline toast first.
+          if (newlyUnlockedSubs) {
+            completedRun = pushLog(
+              completedRun,
+              "milestone",
+              "Sub-characters unlocked! Recruit them from the Subs tab.",
+              event.nowUnixSec
+            );
           }
           // Boss cleared (first time)
           if (isBoss && !state.currentRun.bossesCleared.includes(dungeon.id)) {
-            completedRun = pushLog(completedRun, "boss", `You have bested ${dungeon.name}`, event.nowUnixSec);
+            completedRun = pushLog(
+              completedRun,
+              "boss",
+              `You have bested ${dungeon.name}`,
+              event.nowUnixSec
+            );
           }
           // Trait reveals from dungeon completion
           const allDungeonRevealedIds = [
@@ -809,14 +882,28 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           ];
           for (const traitId of allDungeonRevealedIds) {
             const def = TRAIT_REGISTRY.get(traitId);
-            if (def) completedRun = pushLog(completedRun, "trait_reveal", `A new aspect awakens: ${def.name}`, event.nowUnixSec);
+            if (def)
+              completedRun = pushLog(
+                completedRun,
+                "trait_reveal",
+                `A new aspect awakens: ${def.name}`,
+                event.nowUnixSec
+              );
           }
           // Trait evolutions
-          for (const traitId of [...dungeonEvolve.newlyEvolvedIds, ...alignmentEvolve.newlyEvolvedIds]) {
+          for (const traitId of [
+            ...dungeonEvolve.newlyEvolvedIds,
+            ...alignmentEvolve.newlyEvolvedIds,
+          ]) {
             const def = TRAIT_REGISTRY.get(traitId);
             if (def) {
               const evolvedName = def.evolutionName ?? def.name;
-              completedRun = pushLog(completedRun, "trait_evolved", `[Evolution] ${def.name} -> ${evolvedName}`, event.nowUnixSec);
+              completedRun = pushLog(
+                completedRun,
+                "trait_evolved",
+                `[Evolution] ${def.name} -> ${evolvedName}`,
+                event.nowUnixSec
+              );
             }
           }
           return completedRun;
@@ -937,6 +1024,11 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       };
     }
 
+    case "DEBUG_SET_SUBCHARACTERS_UNLOCKED": {
+      if (state.subCharactersUnlocked === event.unlocked) return state;
+      return { ...state, subCharactersUnlocked: event.unlocked };
+    }
+
     case "DEBUG_GRANT_ITEM": {
       if (!state.currentRun) return state;
       if (!ITEM_REGISTRY.has(event.itemId)) return state;
@@ -1028,9 +1120,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const momentumBonus =
         Math.floor((run.discoveryMomentum ?? 0) / 5) * BALANCE.legacyAsh.momentumBonus;
       const evolutionBonus = evolutionCount * BALANCE.legacyAsh.evolutionBonus;
-      const ashEarned = computeLegacyAshReward(run) +
-        evolutionBonus +
-        momentumBonus;
+      const ashEarned = computeLegacyAshReward(run) + evolutionBonus + momentumBonus;
 
       // Discover traits on death
       const newDiscoveredTraits = new Set([
@@ -1102,11 +1192,17 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         achievements: {
           ...state.achievements,
           milestoneProgress: {
-            totalBossesFelled: state.achievements.milestoneProgress.totalBossesFelled + runBossCount,
-            totalSurvivalSeconds: state.achievements.milestoneProgress.totalSurvivalSeconds + runSurvivalSec,
-            maxDepthEverReached: Math.max(state.achievements.milestoneProgress.maxDepthEverReached, runDepth),
+            totalBossesFelled:
+              state.achievements.milestoneProgress.totalBossesFelled + runBossCount,
+            totalSurvivalSeconds:
+              state.achievements.milestoneProgress.totalSurvivalSeconds + runSurvivalSec,
+            maxDepthEverReached: Math.max(
+              state.achievements.milestoneProgress.maxDepthEverReached,
+              runDepth
+            ),
             distinctPathsCompleted:
-              runPath && !state.achievements.milestoneProgress.distinctPathsCompleted.includes(runPath)
+              runPath &&
+              !state.achievements.milestoneProgress.distinctPathsCompleted.includes(runPath)
                 ? [...state.achievements.milestoneProgress.distinctPathsCompleted, runPath]
                 : state.achievements.milestoneProgress.distinctPathsCompleted,
           },
@@ -1131,7 +1227,14 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
     case "PURCHASE_LEGACY_PERK": {
       const legacyPath = state.meta.legacyPath ?? null;
-      if (!canPurchasePerk(event.perkId, legacyPath, state.meta.legacyPerks ?? [], state.meta.legacyAsh)) {
+      if (
+        !canPurchasePerk(
+          event.perkId,
+          legacyPath,
+          state.meta.legacyPerks ?? [],
+          state.meta.legacyAsh
+        )
+      ) {
         return state;
       }
       const perkDef = LEGACY_PERK_REGISTRY.get(event.perkId)!;
@@ -1146,9 +1249,10 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
     }
 
     case "CREATE_SUBCHARACTER": {
+      if (!state.subCharactersUnlocked) return state; // Locked until first char clears the final dungeon
       if (state.subCharacters.length >= 5) return state; // Max 5 subs
 
-      const newSub: typeof state.subCharacters[number] = {
+      const newSub: (typeof state.subCharacters)[number] = {
         id: `sub_${state.subCharacters.length}`,
         name: event.name,
         path: null,
@@ -1248,9 +1352,11 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
               state.achievements.milestoneProgress.maxDepthEverReached,
               depth
             ),
-            distinctPathsCompleted: sub.path && !state.achievements.milestoneProgress.distinctPathsCompleted.includes(sub.path)
-              ? [...state.achievements.milestoneProgress.distinctPathsCompleted, sub.path]
-              : state.achievements.milestoneProgress.distinctPathsCompleted,
+            distinctPathsCompleted:
+              sub.path &&
+              !state.achievements.milestoneProgress.distinctPathsCompleted.includes(sub.path)
+                ? [...state.achievements.milestoneProgress.distinctPathsCompleted, sub.path]
+                : state.achievements.milestoneProgress.distinctPathsCompleted,
           },
         },
       };
@@ -1287,7 +1393,8 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       if (subIdx === -1) return state;
 
       const sub = state.subCharacters[subIdx];
-      if (!sub.automationConfig.enabled || sub.automationConfig.dungeonIds.length === 0) return state;
+      if (!sub.automationConfig.enabled || sub.automationConfig.dungeonIds.length === 0)
+        return state;
 
       // Sub-character automation is handled in HUD via timer and manual dispatch of events
       return state;
@@ -1333,4 +1440,3 @@ export function reconcileOffline(save: SaveFile, nowUnixSec: number): SaveFile {
 
   return { ...current, updatedAtUnixSec: nowUnixSec, showWelcomeBack: showWelcome };
 }
-

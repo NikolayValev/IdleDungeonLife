@@ -9,13 +9,14 @@ export interface DebugActions {
   grantItem(itemId: string): void;
   unlockDungeon(dungeonId: string): void;
   unlockAllJobs(): void;
+  toggleSubCharacters(): void;
   killRun(): void;
   simulateSeconds(seconds: number): void;
   resetSave(): void;
 }
 
 export function createDebugActions(
-  _getSave: () => SaveFile,
+  getSave: () => SaveFile,
   dispatch: (event: GameEvent) => void,
   replaceSave: (save: SaveFile) => void,
   onRefresh: () => void
@@ -51,6 +52,12 @@ export function createDebugActions(
       onRefresh();
     },
 
+    toggleSubCharacters() {
+      const unlocked = !getSave().subCharactersUnlocked;
+      dispatchAndRefresh({ type: "DEBUG_SET_SUBCHARACTERS_UNLOCKED", unlocked });
+      console.info(`[debug] subCharactersUnlocked = ${unlocked}`);
+    },
+
     killRun() {
       dispatchAndRefresh({ type: "DEBUG_KILL_RUN" });
     },
@@ -78,21 +85,36 @@ export function registerDebugKeys(actions: DebugActions): void {
   window.addEventListener("keydown", (e) => {
     if (!e.ctrlKey && !e.altKey) return;
     switch (e.key) {
-      case "g": actions.addGold(500); break;
-      case "e": actions.addEssence(50); break;
-      case "k": actions.killRun(); break;
+      case "g":
+        actions.addGold(500);
+        break;
+      case "e":
+        actions.addEssence(50);
+        break;
+      case "k":
+        actions.killRun();
+        break;
+      case "s":
+        actions.toggleSubCharacters();
+        break;
       case "r": {
         if (confirm("Reset all save data?")) actions.resetSave();
         break;
       }
-      case "1": actions.simulateSeconds(60); break;
-      case "2": actions.simulateSeconds(3600); break;
-      case "3": actions.simulateSeconds(28800); break;
+      case "1":
+        actions.simulateSeconds(60);
+        break;
+      case "2":
+        actions.simulateSeconds(3600);
+        break;
+      case "3":
+        actions.simulateSeconds(28800);
+        break;
     }
   });
 
   console.info(
-    "[debug] Keys: Ctrl+G=gold, Ctrl+E=essence, Ctrl+K=kill, Ctrl+1=+60s, Ctrl+2=+1h, Ctrl+3=+8h, Ctrl+R=reset\n" +
-    "Access all debug actions via window.__debug"
+    "[debug] Keys: Ctrl+G=gold, Ctrl+E=essence, Ctrl+K=kill, Ctrl+S=toggle subs, Ctrl+1=+60s, Ctrl+2=+1h, Ctrl+3=+8h, Ctrl+R=reset\n" +
+      "Access all debug actions via window.__debug"
   );
 }

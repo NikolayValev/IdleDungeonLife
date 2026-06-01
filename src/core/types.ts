@@ -140,9 +140,9 @@ export interface RunState {
   lifespan: LifespanState;
   visibleTraitIds: string[];
   hiddenTraitIds: string[];
-  evolvedTraitIds: string[];        // trait IDs that have reached their evolved stage
-  discoveryMomentum: number;        // accumulates from dungeon clears + discoveryRate; drives momentum reveals
-  activeLegacyPerkIds: string[];    // snapshot of meta.legacyPerks at run start
+  evolvedTraitIds: string[]; // trait IDs that have reached their evolved stage
+  discoveryMomentum: number; // accumulates from dungeon clears + discoveryRate; drives momentum reveals
+  activeLegacyPerkIds: string[]; // snapshot of meta.legacyPerks at run start
   legacyPath: "holy" | "abyss" | "knowledge" | null; // snapshot of meta.legacyPath at run start
   inventory: InventoryState;
   equipment: EquipmentState;
@@ -229,6 +229,7 @@ export interface SaveFile {
   currentRun: RunState | null;
   playthroughArchive: PlaythroughArchive;
   subCharacters: SubCharacter[]; // Max 5
+  subCharactersUnlocked: boolean; // true once the first character clears the final dungeon
   achievements: AchievementTracker;
   showWelcomeBack?: boolean; // transient: set by reconcileOffline, cleared after display
 }

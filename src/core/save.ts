@@ -14,7 +14,7 @@ import type {
   SaveFile,
   SubCharacter,
 } from "./types";
-import { DUNGEON_REGISTRY } from "../content/dungeons";
+import { DUNGEON_REGISTRY, FINAL_DUNGEON } from "../content/dungeons";
 import { ITEM_REGISTRY } from "../content/items";
 
 const SAVE_KEY = "idledungeonlife_save";
@@ -49,10 +49,7 @@ function nonNegativeNumber(value: unknown, fallback: number): number {
 }
 
 function validStage(value: unknown): BiologicalStage {
-  return value === "youth" ||
-    value === "prime" ||
-    value === "decline" ||
-    value === "terminal"
+  return value === "youth" || value === "prime" || value === "decline" || value === "terminal"
     ? value
     : "youth";
 }
@@ -89,10 +86,7 @@ function migrateInventoryItems(value: unknown): ItemInstance[] {
 
   return value
     .filter(isRecord)
-    .filter(
-      (item) =>
-        typeof item.instanceId === "string" && typeof item.itemId === "string"
-    )
+    .filter((item) => typeof item.instanceId === "string" && typeof item.itemId === "string")
     .map((item) => ({
       instanceId: item.instanceId as string,
       itemId: item.itemId as string,
@@ -188,7 +182,9 @@ function migratePlaythroughRecord(
 
   const finalMeta = migrateMeta(value.finalMeta, metaFallback);
   const timeline = Array.isArray(value.timeline)
-    ? value.timeline.map(migrateTimelineEvent).filter((entry): entry is PlaythroughTimelineEvent => entry !== null)
+    ? value.timeline
+        .map(migrateTimelineEvent)
+        .filter((entry): entry is PlaythroughTimelineEvent => entry !== null)
     : [];
 
   return {
@@ -225,7 +221,10 @@ function migratePlaythroughArchive(
     : [];
 
   return {
-    version: Math.max(PLAYTHROUGH_ARCHIVE_VERSION, Math.floor(finiteNumber(value.version, PLAYTHROUGH_ARCHIVE_VERSION))),
+    version: Math.max(
+      PLAYTHROUGH_ARCHIVE_VERSION,
+      Math.floor(finiteNumber(value.version, PLAYTHROUGH_ARCHIVE_VERSION))
+    ),
     maxRecords: configuredMax,
     records: records.slice(Math.max(0, records.length - configuredMax)),
   };
@@ -384,6 +383,7 @@ export function freshSave(nowUnixSec: number): SaveFile {
     currentRun: null,
     playthroughArchive: emptyPlaythroughArchive(),
     subCharacters: [],
+    subCharactersUnlocked: false,
     achievements: {
       unlockedIds: [],
       milestoneProgress: {
@@ -401,6 +401,14 @@ export function migrateSave(input: SaveFile): SaveFile {
   const base = freshSave(updatedAtUnixSec);
   const inputRecord: Record<string, unknown> = isRecord(input) ? input : {};
   const meta = migrateMeta(input.meta, base.meta);
+  const achievements = migrateAchievements(inputRecord.achievements, base.achievements);
+  const subCharacters = migrateSubCharacters(inputRecord.subCharacters, updatedAtUnixSec);
+  // Backfill the unlock for existing saves: a player who already reached the
+  // final dungeon's depth, or who already created sub-characters, keeps access.
+  const subCharactersUnlocked =
+    inputRecord.subCharactersUnlocked === true ||
+    subCharacters.length > 0 ||
+    achievements.milestoneProgress.maxDepthEverReached >= FINAL_DUNGEON.depthIndex;
 
   return {
     version: SAVE_VERSION,
@@ -412,21 +420,17 @@ export function migrateSave(input: SaveFile): SaveFile {
       updatedAtUnixSec,
       base.meta
     ),
-    subCharacters: migrateSubCharacters(inputRecord.subCharacters, updatedAtUnixSec),
-    achievements: migrateAchievements(inputRecord.achievements, base.achievements),
+    subCharacters,
+    subCharactersUnlocked,
+    achievements,
   };
 }
 
-export function appendPlaythroughRecord(
-  save: SaveFile,
-  record: PlaythroughRecord
-): SaveFile {
+export function appendPlaythroughRecord(save: SaveFile, record: PlaythroughRecord): SaveFile {
   const currentArchive = save.playthroughArchive ?? emptyPlaythroughArchive();
   const maxRecords = Math.max(
     1,
-    Math.floor(
-      nonNegativeNumber(currentArchive.maxRecords, PLAYTHROUGH_ARCHIVE_MAX_RECORDS)
-    )
+    Math.floor(nonNegativeNumber(currentArchive.maxRecords, PLAYTHROUGH_ARCHIVE_MAX_RECORDS))
   );
   const nextRecords = [...currentArchive.records, record];
 
@@ -445,8 +449,7 @@ export function parseSave(raw: string): SaveFile | null {
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed)) return null;
 
-    const version =
-      typeof parsed.version === "number" ? parsed.version : 0;
+    const version = typeof parsed.version === "number" ? parsed.version : 0;
     if (version > SAVE_VERSION) {
       return null;
     }

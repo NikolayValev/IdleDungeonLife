@@ -16,6 +16,7 @@ export type GameEvent =
   | { type: "DEBUG_UNLOCK_JOB"; jobId: string }
   | { type: "DEBUG_UNLOCK_DUNGEON"; dungeonId: string }
   | { type: "DEBUG_GRANT_ITEM"; itemId: string }
+  | { type: "DEBUG_SET_SUBCHARACTERS_UNLOCKED"; unlocked: boolean }
   | { type: "DEBUG_KILL_RUN" }
   | { type: "CLAIM_DEATH"; nowUnixSec: number }
   | { type: "RECONCILE_OFFLINE"; nowUnixSec: number }
@@ -27,4 +28,9 @@ export type GameEvent =
   | { type: "CLAIM_SUBCHARACTER_DEATH"; subCharId: string; nowUnixSec: number }
   | { type: "AUTO_RUN_SUBCHARACTER"; subCharId: string; nowUnixSec: number }
   | { type: "UNLOCK_ACHIEVEMENT"; achievementId: string; nowUnixSec: number }
-  | { type: "TOGGLE_SUBCHARACTER_AUTOMATION"; subCharId: string; enabled: boolean; nowUnixSec: number };
+  | {
+      type: "TOGGLE_SUBCHARACTER_AUTOMATION";
+      subCharId: string;
+      enabled: boolean;
+      nowUnixSec: number;
+    };

@@ -18,7 +18,7 @@ import {
 import { computeStats } from "../../src/core/modifiers";
 import { computeDungeonScore } from "../../src/core/stats";
 import { TALENT_REGISTRY } from "../../src/content/talents";
-import { DUNGEON_REGISTRY } from "../../src/content/dungeons";
+import { DUNGEON_REGISTRY, FINAL_DUNGEON } from "../../src/content/dungeons";
 import { BALANCE } from "../../src/content/balance";
 import { TRAIT_REGISTRY } from "../../src/content/traits";
 import { ITEM_REGISTRY } from "../../src/content/items";
@@ -494,7 +494,11 @@ test("new knowledge talents unlock correctly and have correct costs", () => {
 
 test("new late-game dungeons exist with correct unlock costs", () => {
   const newDungeons = ["bone_cathedral", "deep_vault", "the_wound"];
-  const expectedCosts: Record<string, number> = { bone_cathedral: 110, deep_vault: 160, the_wound: 220 };
+  const expectedCosts: Record<string, number> = {
+    bone_cathedral: 110,
+    deep_vault: 160,
+    the_wound: 220,
+  };
 
   for (const dungeonId of newDungeons) {
     const def = DUNGEON_REGISTRY.get(dungeonId);
@@ -523,12 +527,7 @@ test("new items (legendary + rare) exist in registry", () => {
     "vitality_coil",
     "bone_throne_mantle",
   ];
-  const newRareItems = [
-    "knowledge_prism",
-    "wealth_ward",
-    "sinew_blade",
-    "marrow_spike",
-  ];
+  const newRareItems = ["knowledge_prism", "wealth_ward", "sinew_blade", "marrow_spike"];
 
   for (const itemId of newLegendaryItems) {
     const def = ITEM_REGISTRY.get(itemId);
@@ -603,8 +602,9 @@ test("sorrow_herald reveal rule triggers at alignment <= -40", () => {
     nowUnixSec: 1200,
   });
 
-  const hasReveal = save.currentRun!.visibleTraitIds.includes("sorrow_herald") ||
-                     save.currentRun!.alignment.holyUnholy <= -40;
+  const hasReveal =
+    save.currentRun!.visibleTraitIds.includes("sorrow_herald") ||
+    save.currentRun!.alignment.holyUnholy <= -40;
   expect(hasReveal || save.currentRun!.hiddenTraitIds.includes("sorrow_herald")).toBeTruthy();
 });
 
@@ -652,7 +652,10 @@ test("alignment stays within [-100, 100]", () => {
     });
 
     const align = save.currentRun!.alignment.holyUnholy;
-    expect(align >= -100 && align <= 100, `alignment ${align} should be in [-100, 100]`).toBeTruthy();
+    expect(
+      align >= -100 && align <= 100,
+      `alignment ${align} should be in [-100, 100]`
+    ).toBeTruthy();
   }
 });
 
@@ -768,7 +771,10 @@ test("full run lifecycle: start → dungeon → wear-death → claim → ash acc
 
     expect(claimed.currentRun, "currentRun should be null after claim").toBeNull();
     expect(claimed.meta.legacyAsh >= ashBefore, "ash should not decrease after claim").toBeTruthy();
-    expect(claimed.playthroughArchive.records.length > 0, "should have a playthrough record").toBeTruthy();
+    expect(
+      claimed.playthroughArchive.records.length > 0,
+      "should have a playthrough record"
+    ).toBeTruthy();
     const record = claimed.playthroughArchive.records[0];
     expect(
       record.timeline.some((e) => e.name === "run_died"),
@@ -777,4 +783,86 @@ test("full run lifecycle: start → dungeon → wear-death → claim → ash acc
   } finally {
     setAnalyticsSink(new ConsoleAnalyticsSink());
   }
+});
+
+function clearDungeon(save: SaveFile, dungeonId: string, startSec = 1000): SaveFile {
+  let s = reduceGame(save, { type: "DEBUG_UNLOCK_DUNGEON", dungeonId });
+  s = reduceGame(s, { type: "DEBUG_ADD_RESOURCES", gold: 1_000_000, essence: 0 });
+  s = reduceGame(s, { type: "START_DUNGEON", dungeonId, nowUnixSec: startSec });
+  const completesAt = s.currentRun!.currentDungeon!.completesAtUnixSec;
+  return reduceGame(s, { type: "COMPLETE_DUNGEON", nowUnixSec: completesAt });
+}
+
+test("sub-characters are locked until the first character clears the final dungeon", () => {
+  const save = startRun(1234, 1000);
+  expect(save.subCharactersUnlocked).toBe(false);
+
+  // CREATE is rejected while locked
+  const attempt = reduceGame(save, {
+    type: "CREATE_SUBCHARACTER",
+    name: "Nope",
+    nowUnixSec: 1000,
+  });
+  expect(attempt.subCharacters.length).toBe(0);
+
+  // Clearing the final dungeon unlocks the feature + emits a milestone notice
+  const cleared = clearDungeon(save, FINAL_DUNGEON.id);
+  expect(cleared.subCharactersUnlocked).toBe(true);
+  expect(
+    cleared.currentRun?.runLog.some(
+      (e) => e.kind === "milestone" && /Sub-characters unlocked/.test(e.message)
+    ),
+    "should log a milestone when subs unlock"
+  ).toBe(true);
+
+  // Now creation works
+  const created = reduceGame(cleared, {
+    type: "CREATE_SUBCHARACTER",
+    name: "Echo",
+    nowUnixSec: 2000,
+  });
+  expect(created.subCharacters.length).toBe(1);
+  expect(created.subCharacters[0].name).toBe("Echo");
+});
+
+test("clearing a non-final dungeon does not unlock sub-characters", () => {
+  const save = startRun(1234, 1000);
+  const cleared = clearDungeon(save, "abandoned_chapel");
+  expect(cleared.subCharactersUnlocked).toBe(false);
+});
+
+test("DEBUG_SET_SUBCHARACTERS_UNLOCKED toggles the gate without other side effects", () => {
+  const save = startRun(1234, 1000);
+  const snapshot = clone(save);
+
+  const unlocked = reduceGame(save, {
+    type: "DEBUG_SET_SUBCHARACTERS_UNLOCKED",
+    unlocked: true,
+  });
+  assertUnchanged(save, snapshot);
+  expect(unlocked.subCharactersUnlocked).toBe(true);
+
+  const relocked = reduceGame(unlocked, {
+    type: "DEBUG_SET_SUBCHARACTERS_UNLOCKED",
+    unlocked: false,
+  });
+  expect(relocked.subCharactersUnlocked).toBe(false);
+});
+
+test("sub-character recruitment is capped at 5 once unlocked", () => {
+  let save = reduceGame(startRun(1234, 1000), {
+    type: "DEBUG_SET_SUBCHARACTERS_UNLOCKED",
+    unlocked: true,
+  });
+
+  for (let i = 0; i < 7; i++) {
+    save = reduceGame(save, {
+      type: "CREATE_SUBCHARACTER",
+      name: `Sub ${i}`,
+      nowUnixSec: 1000 + i,
+    });
+  }
+
+  expect(save.subCharacters.length).toBe(5);
+  expect(new Set(save.subCharacters.map((s) => s.id)).size).toBe(5);
 });

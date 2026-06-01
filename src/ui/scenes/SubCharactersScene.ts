@@ -1,5 +1,6 @@
 import { BaseScene } from "./BaseScene";
 import { COLORS, FONTS, LAYOUT } from "../theme";
+import { FINAL_DUNGEON } from "../../content/dungeons";
 
 const P = LAYOUT.padding;
 const CONTENT_TOP = LAYOUT.hudHeight + 8;
@@ -17,6 +18,11 @@ export class SubCharactersScene extends BaseScene {
       fontSize: "20px",
       color: COLORS.accent,
     });
+
+    if (!this.saveFile.subCharactersUnlocked) {
+      this.drawLocked();
+      return;
+    }
 
     const subs = this.saveFile.subCharacters;
     let y = CONTENT_TOP + 40;
@@ -95,10 +101,71 @@ export class SubCharactersScene extends BaseScene {
     }
 
     // Page info at bottom
-    this.add.text(LAYOUT.width / 2, CONTENT_BOTTOM - 10, `${subs.length} / 5 sub-characters`, {
-      fontFamily: FONTS.body,
-      fontSize: "12px",
-      color: COLORS.textMuted,
-    }).setOrigin(0.5, 1);
+    this.add
+      .text(LAYOUT.width / 2, CONTENT_BOTTOM - 10, `${subs.length} / 5 sub-characters`, {
+        fontFamily: FONTS.body,
+        fontSize: "12px",
+        color: COLORS.textMuted,
+      })
+      .setOrigin(0.5, 1);
+  }
+
+  /** Locked state — explains how to unlock sub-characters and shows progress. */
+  private drawLocked(): void {
+    const cx = LAYOUT.width / 2;
+    let y = CONTENT_TOP + 60;
+
+    this.add
+      .text(cx, y, "🔒 Locked", {
+        fontFamily: FONTS.heading,
+        fontSize: "22px",
+        color: COLORS.locked,
+      })
+      .setOrigin(0.5, 0);
+    y += 50;
+
+    this.add
+      .text(
+        cx,
+        y,
+        `Defeat the final dungeon —\n${FINAL_DUNGEON.name} —\nwith your first character to recruit\nsub-characters.`,
+        {
+          fontFamily: FONTS.body,
+          fontSize: "14px",
+          color: COLORS.textSecondary,
+          align: "center",
+          lineSpacing: 8,
+        }
+      )
+      .setOrigin(0.5, 0);
+    y += 130;
+
+    // Progress toward the final dungeon (best depth ever reached).
+    const best = this.saveFile.achievements.milestoneProgress.maxDepthEverReached;
+    const goal = FINAL_DUNGEON.depthIndex;
+    this.add
+      .text(cx, y, `Deepest reached: ${best} / ${goal}`, {
+        fontFamily: FONTS.body,
+        fontSize: "13px",
+        color: COLORS.textMuted,
+        align: "center",
+      })
+      .setOrigin(0.5, 0);
+    y += 28;
+
+    this.add
+      .text(
+        cx,
+        y,
+        "Sub-characters run extra lives in parallel,\neach with their own legacy and automation.",
+        {
+          fontFamily: FONTS.flavor,
+          fontSize: "12px",
+          color: COLORS.textMuted,
+          align: "center",
+          lineSpacing: 6,
+        }
+      )
+      .setOrigin(0.5, 0);
   }
 }

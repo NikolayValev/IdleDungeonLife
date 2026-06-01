@@ -1,6 +1,10 @@
-# Balancing Mode - Multi-Instance Simulation System
+# Balancing — Multi-Instance Simulation Harness
 
-A comprehensive system for running multiple isolated game instances with configurable behaviors, strategies, and metrics collection. Perfect for testing game balance, analyzing progression curves, and validating design decisions.
+A headless system for running many isolated game instances with configurable
+strategies and metrics collection. It drives the real reducer (no UI), so results
+are deterministic and reflect actual game logic — useful for tuning balance,
+analyzing progression curves, and validating design changes. See the
+[README](README.md) for the project overview.
 
 ## Features
 
