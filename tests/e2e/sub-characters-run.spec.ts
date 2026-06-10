@@ -30,10 +30,11 @@ test.describe("sub-character runs", () => {
     expect(texts.some((s) => s.startsWith("Status: Running"))).toBe(true);
 
     // Age the sub until it falls. Pure aging kills by 1800s (100 vitality over
-    // 30 min); loop in 2-min steps, capped well past that to survive trait variance.
+    // 30 min); even worst-case stacked decay-reduction traits die by ~3400s, so a
+    // 50 × 2-min = 6000s budget keeps comfortable headroom against trait variance.
     const fell = await page.evaluate(() => {
       const t = (window as any).__test;
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 50; i++) {
         t.advanceTime(120_000); // +2 min
         const sub = t.getSave().subCharacters[0];
         if (sub.currentRun && !sub.currentRun.alive) return true;
