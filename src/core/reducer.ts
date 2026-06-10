@@ -1270,9 +1270,6 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         currentRun: null,
         automationConfig: {
           enabled: false,
-          dungeonIds: [],
-          intervalSec: 30,
-          lastAutoRunUnixSec: event.nowUnixSec,
         },
         stats: {
           totalRunsCompleted: 0,
@@ -1384,19 +1381,6 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
     case "UNLOCK_ACHIEVEMENT": {
       // This is auto-triggered by checkAndUnlockAchievements, so just return state
-      return state;
-    }
-
-    case "AUTO_RUN_SUBCHARACTER": {
-      // Simplified: just prevent action if automation not enabled
-      const subIdx = state.subCharacters.findIndex((s) => s.id === event.subCharId);
-      if (subIdx === -1) return state;
-
-      const sub = state.subCharacters[subIdx];
-      if (!sub.automationConfig.enabled || sub.automationConfig.dungeonIds.length === 0)
-        return state;
-
-      // Sub-character automation is handled in HUD via timer and manual dispatch of events
       return state;
     }
 

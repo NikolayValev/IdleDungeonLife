@@ -26,7 +26,6 @@ export type GameEvent =
   | { type: "CREATE_SUBCHARACTER"; name: string; nowUnixSec: number }
   | { type: "START_SUBCHARACTER_RUN"; subCharId: string; nowUnixSec: number }
   | { type: "CLAIM_SUBCHARACTER_DEATH"; subCharId: string; nowUnixSec: number }
-  | { type: "AUTO_RUN_SUBCHARACTER"; subCharId: string; nowUnixSec: number }
   | { type: "UNLOCK_ACHIEVEMENT"; achievementId: string; nowUnixSec: number }
   | {
       type: "TOGGLE_SUBCHARACTER_AUTOMATION";

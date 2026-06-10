@@ -197,10 +197,7 @@ export interface AchievementTracker {
 }
 
 export interface SubCharacterAutomationConfig {
-  enabled: boolean;
-  dungeonIds: string[]; // Which dungeons to cycle through (rotation)
-  intervalSec: number; // Seconds between auto-runs (10-300)
-  lastAutoRunUnixSec: number; // Timestamp of last automated run
+  enabled: boolean; // when true, auto-restart this sub's life on death
 }
 
 export interface SubCharacterStats {

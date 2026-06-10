@@ -342,9 +342,6 @@ function migrateSubCharacter(value: unknown, fallbackNowUnixSec: number): SubCha
     currentRun: migrateRun(value.currentRun, fallbackNowUnixSec),
     automationConfig: {
       enabled: autoConf.enabled === true,
-      dungeonIds: uniqueStrings(autoConf.dungeonIds),
-      intervalSec: Math.max(10, Math.min(300, finiteNumber(autoConf.intervalSec, 30))),
-      lastAutoRunUnixSec: nonNegativeNumber(autoConf.lastAutoRunUnixSec, fallbackNowUnixSec),
     },
     stats: {
       totalRunsCompleted: nonNegativeNumber(stats.totalRunsCompleted, 0),
