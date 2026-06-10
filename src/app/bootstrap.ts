@@ -15,6 +15,7 @@ import { createDebugActions, registerDebugKeys } from "./debug";
 import { saveToDisk } from "../core/save";
 import type { SaveFile } from "../core/types";
 import { advanceRun } from "../sim/step";
+import { advanceSubCharacters } from "../sim/subRunner";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -162,7 +163,8 @@ function installDevHooks(
       const start =
         game.saveFile.currentRun?.lastTickUnixSec ?? game.saveFile.updatedAtUnixSec;
       const advanced = advanceRun(game.saveFile, start, seconds, 1);
-      setSave(advanced);
+      const withSubs = advanceSubCharacters(advanced, start + seconds, 10);
+      setSave(withSubs);
       restartActiveScenes(game);
       return game.saveFile;
     },

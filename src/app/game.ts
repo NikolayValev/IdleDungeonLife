@@ -3,6 +3,7 @@ import type { SaveFile } from "../core/types";
 import type { GameEvent } from "../core/events";
 import { reduceGame, reconcileOffline } from "../core/reducer";
 import { saveToDisk, loadFromDisk, freshSave } from "../core/save";
+import { advanceSubCharacters } from "../sim/subRunner";
 import { LocalArrayAnalyticsSink, setAnalyticsSink } from "../core/analytics";
 
 /**
@@ -20,8 +21,9 @@ export class GameController extends Phaser.Game {
     const existing = loadFromDisk();
 
     if (existing) {
-      // Reconcile offline progression
-      this.saveFile = reconcileOffline(existing, now);
+      // Reconcile offline progression (main run), then auto-play subs offline.
+      const reconciled = reconcileOffline(existing, now);
+      this.saveFile = advanceSubCharacters(reconciled, now, 10);
     } else {
       this.saveFile = freshSave(now);
     }
@@ -36,6 +38,15 @@ export class GameController extends Phaser.Game {
     } catch (err) {
       console.error("[GameController] dispatch error for event", event.type, err);
       // Preserve current save state — do not corrupt disk on reducer failure
+    }
+  }
+
+  /** Advance all sub-character lives up to `nowUnixSec`, persisting if changed. */
+  advanceSubs(nowUnixSec: number): void {
+    const next = advanceSubCharacters(this.saveFile, nowUnixSec, 1);
+    if (next !== this.saveFile) {
+      this.saveFile = next;
+      saveToDisk(this.saveFile);
     }
   }
 
