@@ -46,6 +46,8 @@ describe("advanceSubCharacters", () => {
     save = reduceGame(save, { type: "START_SUBCHARACTER_RUN", subCharId: "sub_0", nowUnixSec: NOW });
     expect(save.subCharacters[0].currentRun?.alive).toBe(true);
 
+    // Base vitality decay empties 100 vitality in ~1800s; 86400s (capped at
+    // maxOfflineSec) guarantees death regardless of any vitality-regen traits.
     const next = advanceSubCharacters(save, NOW + 86400, 30);
     const run = next.subCharacters[0].currentRun;
     expect(run).not.toBeNull();

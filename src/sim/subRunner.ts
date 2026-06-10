@@ -11,8 +11,10 @@ const POLICY = new BaselinePolicy();
  *
  * A running sub is advanced by running the normal run machinery
  * (`advanceRun` + policy) on a per-sub view of the save, writing back only the
- * sub's own `meta` + `currentRun` so global state is untouched. When automation
- * is enabled, a fallen run is claimed and restarted, and an idle sub is started.
+ * sub's own `meta` + `currentRun` — the main run is never touched. When automation
+ * is enabled, a fallen run is claimed and restarted, and an idle sub is started;
+ * claiming (`CLAIM_SUBCHARACTER_DEATH`) intentionally credits global achievement
+ * milestones, the one deliberate way a sub's life affects shared state.
  *
  * Pure: `(SaveFile, number) -> SaveFile`. Returns the same reference when nothing
  * changes so callers can skip persistence cheaply.
