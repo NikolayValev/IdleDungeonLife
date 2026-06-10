@@ -157,20 +157,21 @@ export class MainScene extends BaseScene {
       const nameText = isEvolved ? `- ${displayName}  [+]` : `- ${displayName}`;
       const nameColor = isEvolved ? COLORS.accent : COLORS.textPrimary;
 
-      this.add.text(p + 10, y, nameText, {
+      const nameObj = this.add.text(p + 10, y, nameText, {
         fontFamily: FONTS.body,
         fontSize: "12px",
         color: nameColor,
         wordWrap: { width: LAYOUT.cardWidth - 20 },
       });
-      y += 16;
-      this.add.text(p + 18, y, displayDesc, {
+      y += nameObj.height + 2;
+      const descObj = this.add.text(p + 18, y, displayDesc, {
         fontFamily: FONTS.body,
         fontSize: "11px",
         color: COLORS.textMuted,
         wordWrap: { width: LAYOUT.cardWidth - 28 },
+        lineSpacing: 2,
       });
-      y += 28;
+      y += descObj.height + 12;
     }
 
     for (const _tid of run.hiddenTraitIds) {
@@ -405,20 +406,35 @@ export class MainScene extends BaseScene {
       fontSize: "14px",
       color: COLORS.textSecondary,
     });
-    y += 20;
+    y += 22;
+
+    const textX = p + 16;
+    const textWidth = LAYOUT.cardWidth - 16 - 6;
+    // Reserve room at the bottom so entries never overlap the resource chips.
+    const maxBottom = HOME_BOTTOM - 40;
 
     const entries = [...log].reverse().slice(0, 7);
     for (const entry of entries) {
       const color = MainScene.LOG_KIND_COLOR[entry.kind] ?? COLORS.textMuted;
-      this.add.text(p + 10, y, entry.message, {
+      const text = this.add.text(textX, y, entry.message, {
         fontFamily: FONTS.body,
         fontSize: "11px",
         color,
-        wordWrap: { width: LAYOUT.cardWidth - 20 },
+        wordWrap: { width: textWidth },
+        lineSpacing: 3,
       });
-      y += 16;
+
+      // Stop once the next entry would spill into the chips region.
+      if (y + text.height > maxBottom) {
+        text.destroy();
+        break;
+      }
+
+      // Kind-colored pip aligned to the first line of the message.
+      this.add.circle(p + 6, y + 7, 3, colorNumber(color), 0.9);
+      y += text.height + 9;
     }
-    return y + 4;
+    return y + 2;
   }
 
   private drawResourceChips(run: RunState, y: number): void {
