@@ -72,9 +72,9 @@ export class HudScene extends BaseScene {
       this.dispatchDeathIfNeeded();
     }
 
-    // Advance sub-character lives, then refresh the Subs tab if open.
-    (this.game as any).advanceSubs(now);
-    if (this.scene.isActive("SubCharactersScene")) {
+    // Advance sub-character lives; refresh the Subs tab only when something changed.
+    const subsChanged = (this.game as any).advanceSubs(now);
+    if (subsChanged && this.scene.isActive("SubCharactersScene")) {
       this.scene.get("SubCharactersScene").scene.restart();
     }
 

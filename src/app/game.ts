@@ -41,13 +41,16 @@ export class GameController extends Phaser.Game {
     }
   }
 
-  /** Advance all sub-character lives up to `nowUnixSec`, persisting if changed. */
-  advanceSubs(nowUnixSec: number): void {
+  /**
+   * Advance all sub-character lives up to `nowUnixSec`, persisting if changed.
+   * Returns true when any sub state changed, so callers can skip redundant redraws.
+   */
+  advanceSubs(nowUnixSec: number): boolean {
     const next = advanceSubCharacters(this.saveFile, nowUnixSec, 1);
-    if (next !== this.saveFile) {
-      this.saveFile = next;
-      saveToDisk(this.saveFile);
-    }
+    if (next === this.saveFile) return false;
+    this.saveFile = next;
+    saveToDisk(this.saveFile);
+    return true;
   }
 
   unlockDungeon(dungeonId: string): void {
