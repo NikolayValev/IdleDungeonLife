@@ -36,6 +36,9 @@ export function advanceSubCharacters(
 
     if (sub.currentRun?.alive) {
       const start = sub.currentRun.lastTickUnixSec;
+      // Cap per call; any overflow beyond maxOfflineSec is not forfeited (unlike
+      // the main run) — the sub stays behind and catches up via live ticks, but
+      // in practice the run dies inside the window and claim/restart resets it.
       const elapsed = Math.min(nowUnixSec - start, BALANCE.maxOfflineSec);
       if (elapsed > 0) {
         const view: SaveFile = { ...working, meta: sub.meta, currentRun: sub.currentRun };
