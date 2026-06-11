@@ -551,6 +551,14 @@ export class MainScene extends BaseScene {
     const state = deriveCharacterVisualState(input);
     const svg = buildCharacterSvg(state);
     const textureKey = ["avatar", run.seed, fnv1a32(svg).toString(16)].join("_");
+
+    // Fast path: the texture is already cached, so add it this frame — no async
+    // hop — which prevents a flicker when the HUD restarts this scene each tick.
+    if (this.textures.exists(textureKey)) {
+      this.add.image(panelCenterX, avatarCY, textureKey).setDisplaySize(92, 92);
+      return;
+    }
+
     const requestId = ++this.avatarRequestId;
 
     void createAvatarTextureKey(this, textureKey, input)
