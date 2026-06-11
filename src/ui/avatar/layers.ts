@@ -175,6 +175,21 @@ function renderArms(state: CharacterVisualState, ctx: RenderContext): string {
   );
 }
 
+function torsoTrim(metrics: ReturnType<typeof bodyMetrics>, ctx: RenderContext): string {
+  const beltLeft = metrics.waistLeft - 6;
+  const beltWidth = metrics.waistRight - metrics.waistLeft + 12;
+  return [
+    rect(beltLeft, 318, beltWidth, 16, ctx.fillC2, ctx.outline), // belt
+    rect(
+      metrics.shoulderLeft + 14,
+      212,
+      metrics.shoulderRight - metrics.shoulderLeft - 28,
+      8,
+      ctx.fillC2
+    ), // collar accent
+  ].join("");
+}
+
 function renderTorso(state: CharacterVisualState, ctx: RenderContext): string {
   const metrics = bodyMetrics(state);
 
@@ -191,7 +206,7 @@ function renderTorso(state: CharacterVisualState, ctx: RenderContext): string {
         ],
         ctx.fillC1,
         ctx.outline
-      )
+      ) + torsoTrim(metrics, ctx)
     );
   }
 
@@ -220,7 +235,7 @@ function renderTorso(state: CharacterVisualState, ctx: RenderContext): string {
           ctx.outline
         ),
         rect(metrics.waistLeft, 348, metrics.waistRight - metrics.waistLeft, 44, ctx.fillC1, ctx.outline),
-      ].join("")
+      ].join("") + torsoTrim(metrics, ctx)
     );
   }
 
@@ -234,19 +249,26 @@ function renderTorso(state: CharacterVisualState, ctx: RenderContext): string {
       ],
       ctx.fillC1,
       ctx.outline
-    )
+    ) + torsoTrim(metrics, ctx)
   );
 }
 
 function renderHead(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.head === 0) {
-    return group(circle(256, 148, 58, ctx.fillC0, ctx.outline), `translate(0 ${state.headOffsetY})`);
+    return group(
+      [
+        circle(256, 148, 58, ctx.fillC0, ctx.outline),
+        rect(226, 138, 60, 7, ctx.outline), // brow ridge
+      ].join(""),
+      `translate(0 ${state.headOffsetY})`
+    );
   }
 
   return group(
     [
       rect(204, 94, 104, 108, ctx.fillC0, ctx.outline),
       rect(214, 84, 84, 20, ctx.fillC0, ctx.outline),
+      rect(220, 138, 72, 7, ctx.outline), // brow ridge
     ].join(""),
     `translate(0 ${state.headOffsetY})`
   );
