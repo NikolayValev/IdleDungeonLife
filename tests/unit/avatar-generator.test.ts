@@ -85,7 +85,9 @@ test("svg rasterization is deterministic and transparent-friendly", () => {
   expect(first.equals(second)).toBe(true);
   expect(svg.includes("viewBox=\"0 0 512 512\"")).toBe(true);
   expect(svg.includes("<path")).toBe(false);
-  expect(svg.includes("var(--c0)")).toBe(true);
+  expect(svg.includes("var(--c0)")).toBe(false);
+  expect(svg.includes("<linearGradient")).toBe(true);
+  expect(svg.includes("stroke=")).toBe(true);
 });
 
 test("atlas export returns deterministic frame placement", async () => {

@@ -1,18 +1,40 @@
 import type { CharacterVisualState } from "./types";
 
-type FillToken = "c0" | "c1" | "c2";
-
-function rect(x: number, y: number, width: number, height: number, fill: FillToken): string {
-  return `<rect class="${fill}" x="${x}" y="${y}" width="${width}" height="${height}"/>`;
+export interface RenderContext {
+  fillC0: string; // body / skin fill (gradient url ref)
+  fillC1: string; // garment fill (gradient url ref)
+  fillC2: string; // accent (flat)
+  outline: string; // stroke color for outer-boundary layers
 }
 
-function circle(cx: number, cy: number, radius: number, fill: FillToken): string {
-  return `<circle class="${fill}" cx="${cx}" cy="${cy}" r="${radius}"/>`;
+function strokeAttr(stroke?: string, strokeWidth = 3): string {
+  return stroke
+    ? ` stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"`
+    : "";
 }
 
-function polygon(points: ReadonlyArray<readonly [number, number]>, fill: FillToken): string {
+function rect(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fill: string,
+  stroke?: string
+): string {
+  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}"${strokeAttr(stroke)}/>`;
+}
+
+function circle(cx: number, cy: number, radius: number, fill: string, stroke?: string): string {
+  return `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}"${strokeAttr(stroke)}/>`;
+}
+
+function polygon(
+  points: ReadonlyArray<readonly [number, number]>,
+  fill: string,
+  stroke?: string
+): string {
   const serialized = points.map(([x, y]) => `${x},${y}`).join(" ");
-  return `<polygon class="${fill}" points="${serialized}"/>`;
+  return `<polygon points="${serialized}" fill="${fill}"${strokeAttr(stroke)}/>`;
 }
 
 function group(children: string, transform?: string): string {
@@ -67,11 +89,11 @@ function bodyMetrics(state: CharacterVisualState): {
   };
 }
 
-function renderBody(state: CharacterVisualState): string {
+function renderBody(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.body === 0) {
     return group(
       [
-        rect(240, 184, 32, 20, "c0"),
+        rect(240, 184, 32, 20, ctx.fillC0, ctx.outline),
         polygon(
           [
             [206, 212],
@@ -79,7 +101,8 @@ function renderBody(state: CharacterVisualState): string {
             [292, 330],
             [220, 330],
           ],
-          "c0"
+          ctx.fillC0,
+          ctx.outline
         ),
       ].join("")
     );
@@ -87,7 +110,7 @@ function renderBody(state: CharacterVisualState): string {
 
   return group(
     [
-      rect(232, 182, 48, 22, "c0"),
+      rect(232, 182, 48, 22, ctx.fillC0, ctx.outline),
       polygon(
         [
           [194, 210],
@@ -95,13 +118,14 @@ function renderBody(state: CharacterVisualState): string {
           [302, 338],
           [210, 338],
         ],
-        "c0"
+        ctx.fillC0,
+        ctx.outline
       ),
     ].join("")
   );
 }
 
-function renderLegs(state: CharacterVisualState): string {
+function renderLegs(state: CharacterVisualState, ctx: RenderContext): string {
   const metrics = bodyMetrics(state);
 
   if (state.legs === 1) {
@@ -114,25 +138,26 @@ function renderLegs(state: CharacterVisualState): string {
             [metrics.hipRight - 22, 430],
             [metrics.hipLeft + 22, 430],
           ],
-          "c0"
+          ctx.fillC0,
+          ctx.outline
         ),
-        rect(224, 430, 30, 20, "c0"),
-        rect(258, 430, 30, 20, "c0"),
+        rect(224, 430, 30, 20, ctx.fillC0, ctx.outline),
+        rect(258, 430, 30, 20, ctx.fillC0, ctx.outline),
       ].join("")
     );
   }
 
   return group(
     [
-      rect(metrics.legLeft, 334, metrics.legWidth, 108, "c0"),
-      rect(metrics.legRight, 334, metrics.legWidth, 108, "c0"),
-      rect(metrics.legLeft - 4, 438, metrics.legWidth + 8, 18, "c0"),
-      rect(metrics.legRight - 4, 438, metrics.legWidth + 8, 18, "c0"),
+      rect(metrics.legLeft, 334, metrics.legWidth, 108, ctx.fillC0, ctx.outline),
+      rect(metrics.legRight, 334, metrics.legWidth, 108, ctx.fillC0, ctx.outline),
+      rect(metrics.legLeft - 4, 438, metrics.legWidth + 8, 18, ctx.fillC0, ctx.outline),
+      rect(metrics.legRight - 4, 438, metrics.legWidth + 8, 18, ctx.fillC0, ctx.outline),
     ].join("")
   );
 }
 
-function renderArms(state: CharacterVisualState): string {
+function renderArms(state: CharacterVisualState, ctx: RenderContext): string {
   const metrics = bodyMetrics(state);
   const width = state.arms === 0 ? 26 : 40;
   const leftX = state.arms === 0 ? metrics.armLeft : metrics.armLeft - 8;
@@ -141,16 +166,16 @@ function renderArms(state: CharacterVisualState): string {
 
   return group(
     [
-      rect(leftX, 220, width, 118, "c0"),
-      rect(rightX, 220, width, 118, "c0"),
-      circle(leftX + (width / 2), 344, bottomRadius, "c0"),
-      circle(rightX + (width / 2), 344, bottomRadius, "c0"),
+      rect(leftX, 220, width, 118, ctx.fillC0, ctx.outline),
+      rect(rightX, 220, width, 118, ctx.fillC0, ctx.outline),
+      circle(leftX + (width / 2), 344, bottomRadius, ctx.fillC0, ctx.outline),
+      circle(rightX + (width / 2), 344, bottomRadius, ctx.fillC0, ctx.outline),
     ].join(""),
     `translate(0 ${state.armsOffsetY})`
   );
 }
 
-function renderTorso(state: CharacterVisualState): string {
+function renderTorso(state: CharacterVisualState, ctx: RenderContext): string {
   const metrics = bodyMetrics(state);
 
   if (state.torso === 0) {
@@ -164,7 +189,8 @@ function renderTorso(state: CharacterVisualState): string {
           [metrics.hipLeft + 8, 392],
           [metrics.waistLeft, 300],
         ],
-        "c1"
+        ctx.fillC1,
+        ctx.outline
       )
     );
   }
@@ -172,7 +198,7 @@ function renderTorso(state: CharacterVisualState): string {
   if (state.torso === 1) {
     return group(
       [
-        rect(metrics.waistLeft - 8, 216, metrics.waistRight - metrics.waistLeft + 16, 132, "c1"),
+        rect(metrics.waistLeft - 8, 216, metrics.waistRight - metrics.waistLeft + 16, 132, ctx.fillC1, ctx.outline),
         polygon(
           [
             [metrics.shoulderLeft, 220],
@@ -180,7 +206,8 @@ function renderTorso(state: CharacterVisualState): string {
             [metrics.waistLeft - 8, 256],
             [metrics.shoulderLeft + 12, 278],
           ],
-          "c1"
+          ctx.fillC1,
+          ctx.outline
         ),
         polygon(
           [
@@ -189,9 +216,10 @@ function renderTorso(state: CharacterVisualState): string {
             [metrics.waistRight + 8, 256],
             [metrics.shoulderRight - 12, 278],
           ],
-          "c1"
+          ctx.fillC1,
+          ctx.outline
         ),
-        rect(metrics.waistLeft, 348, metrics.waistRight - metrics.waistLeft, 44, "c1"),
+        rect(metrics.waistLeft, 348, metrics.waistRight - metrics.waistLeft, 44, ctx.fillC1, ctx.outline),
       ].join("")
     );
   }
@@ -204,26 +232,27 @@ function renderTorso(state: CharacterVisualState): string {
         [metrics.hipRight + 12, 382],
         [metrics.hipLeft - 12, 382],
       ],
-      "c1"
+      ctx.fillC1,
+      ctx.outline
     )
   );
 }
 
-function renderHead(state: CharacterVisualState): string {
+function renderHead(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.head === 0) {
-    return group(circle(256, 148, 58, "c0"), `translate(0 ${state.headOffsetY})`);
+    return group(circle(256, 148, 58, ctx.fillC0, ctx.outline), `translate(0 ${state.headOffsetY})`);
   }
 
   return group(
     [
-      rect(204, 94, 104, 108, "c0"),
-      rect(214, 84, 84, 20, "c0"),
+      rect(204, 94, 104, 108, ctx.fillC0, ctx.outline),
+      rect(214, 84, 84, 20, ctx.fillC0, ctx.outline),
     ].join(""),
     `translate(0 ${state.headOffsetY})`
   );
 }
 
-function renderHoodHair(state: CharacterVisualState): string {
+function renderHoodHair(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.hoodHair === 2) {
     return group("", `translate(0 ${state.headOffsetY})`);
   }
@@ -231,9 +260,9 @@ function renderHoodHair(state: CharacterVisualState): string {
   if (state.hoodHair === 1) {
     return group(
       [
-        rect(214, 90, 84, 18, "c1"),
-        rect(206, 104, 18, 38, "c1"),
-        rect(288, 104, 18, 38, "c1"),
+        rect(214, 90, 84, 18, ctx.fillC1, ctx.outline),
+        rect(206, 104, 18, 38, ctx.fillC1, ctx.outline),
+        rect(288, 104, 18, 38, ctx.fillC1, ctx.outline),
       ].join(""),
       `translate(0 ${state.headOffsetY})`
     );
@@ -251,15 +280,16 @@ function renderHoodHair(state: CharacterVisualState): string {
           [286, 212],
           [226, 212],
         ],
-        "c1"
+        ctx.fillC1,
+        ctx.outline
       ),
-      rect(208, 188, 96, 22, "c1"),
+      rect(208, 188, 96, 22, ctx.fillC1, ctx.outline),
     ].join(""),
     `translate(0 ${state.headOffsetY})`
   );
 }
 
-function renderHorns(state: CharacterVisualState): string {
+function renderHorns(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.horns === 0) {
     return group("", `translate(0 ${state.headOffsetY})`);
   }
@@ -273,7 +303,8 @@ function renderHorns(state: CharacterVisualState): string {
             [194, 76],
             [218, 92],
           ],
-          "c1"
+          ctx.fillC1,
+          ctx.outline
         ),
         polygon(
           [
@@ -281,7 +312,8 @@ function renderHorns(state: CharacterVisualState): string {
             [318, 76],
             [294, 92],
           ],
-          "c1"
+          ctx.fillC1,
+          ctx.outline
         ),
       ].join(""),
       `translate(0 ${state.headOffsetY})`
@@ -298,7 +330,8 @@ function renderHorns(state: CharacterVisualState): string {
           [204, 58],
           [220, 94],
         ],
-        "c1"
+        ctx.fillC1,
+        ctx.outline
       ),
       polygon(
         [
@@ -308,35 +341,36 @@ function renderHorns(state: CharacterVisualState): string {
           [308, 58],
           [292, 94],
         ],
-        "c1"
+        ctx.fillC1,
+        ctx.outline
       ),
     ].join(""),
     `translate(0 ${state.headOffsetY})`
   );
 }
 
-function renderEyes(state: CharacterVisualState): string {
+function renderEyes(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.eyes === 0) {
     return group(
-      [circle(232, 150, 8, "c2"), circle(280, 150, 8, "c2")].join(""),
+      [circle(232, 150, 8, ctx.fillC2), circle(280, 150, 8, ctx.fillC2)].join(""),
       `translate(0 ${state.headOffsetY})`
     );
   }
 
   if (state.eyes === 1) {
     return group(
-      [rect(222, 146, 20, 6, "c2"), rect(270, 146, 20, 6, "c2")].join(""),
+      [rect(222, 146, 20, 6, ctx.fillC2), rect(270, 146, 20, 6, ctx.fillC2)].join(""),
       `translate(0 ${state.headOffsetY})`
     );
   }
 
   return group(
-    [circle(228, 150, 10, "c2"), circle(284, 150, 10, "c2")].join(""),
+    [circle(228, 150, 10, ctx.fillC2), circle(284, 150, 10, ctx.fillC2)].join(""),
     `translate(0 ${state.headOffsetY})`
   );
 }
 
-function renderMarkings(state: CharacterVisualState): string {
+function renderMarkings(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.markings === 0) {
     return group("");
   }
@@ -351,9 +385,9 @@ function renderMarkings(state: CharacterVisualState): string {
             [256, 288],
             [238, 270],
           ],
-          "c2"
+          ctx.fillC2
         ),
-        rect(252, 286, 8, 34, "c2"),
+        rect(252, 286, 8, 34, ctx.fillC2),
       ].join("")
     );
   }
@@ -361,23 +395,23 @@ function renderMarkings(state: CharacterVisualState): string {
   if (state.markings === 2) {
     return group(
       [
-        rect(252, 126 + state.headOffsetY, 8, 52, "c2"),
-        rect(236, 146 + state.headOffsetY, 16, 8, "c2"),
+        rect(252, 126 + state.headOffsetY, 8, 52, ctx.fillC2),
+        rect(236, 146 + state.headOffsetY, 16, 8, ctx.fillC2),
       ].join("")
     );
   }
 
   return group(
     [
-      rect(176, 228, 22, 40, "c2"),
-      rect(314, 228, 22, 40, "c2"),
-      rect(182, 238, 10, 20, "c1"),
-      rect(320, 238, 10, 20, "c1"),
+      rect(176, 228, 22, 40, ctx.fillC2),
+      rect(314, 228, 22, 40, ctx.fillC2),
+      rect(182, 238, 10, 20, ctx.fillC1),
+      rect(320, 238, 10, 20, ctx.fillC1),
     ].join("")
   );
 }
 
-function renderOverlays(state: CharacterVisualState): string {
+function renderOverlays(state: CharacterVisualState, ctx: RenderContext): string {
   if (state.overlays === 0) {
     return group("");
   }
@@ -385,10 +419,10 @@ function renderOverlays(state: CharacterVisualState): string {
   if (state.overlays === 1) {
     return group(
       [
-        circle(214, 264, 8, "c2"),
-        circle(286, 246, 10, "c2"),
-        circle(238, 344, 7, "c2"),
-        circle(292, 364, 9, "c2"),
+        circle(214, 264, 8, ctx.fillC2),
+        circle(286, 246, 10, ctx.fillC2),
+        circle(238, 344, 7, ctx.fillC2),
+        circle(292, 364, 9, ctx.fillC2),
       ].join("")
     );
   }
@@ -402,7 +436,7 @@ function renderOverlays(state: CharacterVisualState): string {
           [246, 148 + state.headOffsetY],
           [238, 148 + state.headOffsetY],
         ],
-        "c2"
+        ctx.fillC2
       ),
       polygon(
         [
@@ -411,7 +445,7 @@ function renderOverlays(state: CharacterVisualState): string {
           [296, 184 + state.headOffsetY],
           [288, 184 + state.headOffsetY],
         ],
-        "c2"
+        ctx.fillC2
       ),
       polygon(
         [
@@ -420,7 +454,7 @@ function renderOverlays(state: CharacterVisualState): string {
           [266, 304],
           [258, 304],
         ],
-        "c2"
+        ctx.fillC2
       ),
       polygon(
         [
@@ -429,7 +463,7 @@ function renderOverlays(state: CharacterVisualState): string {
           [304, 354],
           [296, 354],
         ],
-        "c2"
+        ctx.fillC2
       ),
     ].join("")
   );
@@ -461,27 +495,31 @@ export const VARIANT_COUNTS = {
   overlays: 3,
 } as const;
 
-export function renderLayer(layer: (typeof LAYER_ORDER)[number], state: CharacterVisualState): string {
+export function renderLayer(
+  layer: (typeof LAYER_ORDER)[number],
+  state: CharacterVisualState,
+  ctx: RenderContext
+): string {
   switch (layer) {
     case "body":
-      return renderBody(state);
+      return renderBody(state, ctx);
     case "legs":
-      return renderLegs(state);
+      return renderLegs(state, ctx);
     case "arms":
-      return renderArms(state);
+      return renderArms(state, ctx);
     case "torso":
-      return renderTorso(state);
+      return renderTorso(state, ctx);
     case "head":
-      return renderHead(state);
+      return renderHead(state, ctx);
     case "hoodHair":
-      return renderHoodHair(state);
+      return renderHoodHair(state, ctx);
     case "horns":
-      return renderHorns(state);
+      return renderHorns(state, ctx);
     case "eyes":
-      return renderEyes(state);
+      return renderEyes(state, ctx);
     case "markings":
-      return renderMarkings(state);
+      return renderMarkings(state, ctx);
     case "overlays":
-      return renderOverlays(state);
+      return renderOverlays(state, ctx);
   }
 }
