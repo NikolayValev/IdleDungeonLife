@@ -4,7 +4,9 @@ import { fnv1a32 } from "./hashing";
 import type { CharacterVisualState } from "./types";
 
 export function buildCharacterSvg(state: CharacterVisualState): string {
-  // Unique-but-deterministic gradient ids so nested atlas SVGs don't collide.
+  // Gradient ids are deterministic per palette. In-app each figure is its own
+  // SVG, so there is no collision; the atlas builder re-namespaces ids per frame
+  // when it nests many figures into one document.
   const sfx = fnv1a32(`${state.c0}|${state.c1}|${state.c2}`).toString(36);
   const g0 = `g0_${sfx}`;
   const g1 = `g1_${sfx}`;
@@ -13,7 +15,7 @@ export function buildCharacterSvg(state: CharacterVisualState): string {
     fillC0: `url(#${g0})`,
     fillC1: `url(#${g1})`,
     fillC2: state.c2,
-    outline: darken(state.c1, 0.6),
+    outline: darken(state.c1, 0.6), // darkened garment tone, unifies the silhouette
   };
 
   const gradient = (id: string, base: string, hi: number, lo: number): string =>

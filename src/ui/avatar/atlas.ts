@@ -41,7 +41,10 @@ function buildAtlasSvg(
     const x = col * step + paddingPx;
     const y = row * step + paddingPx;
     frames[item.key] = { x, y, w: cellSize, h: cellSize };
-    nodes.push(`<g transform="translate(${x} ${y})">${item.svg}</g>`);
+    // Per-figure gradient ids (g0_*/g1_*) repeat for figures that share a palette.
+    // Namespace them by frame so nested figures never resolve a sibling's gradient.
+    const scoped = item.svg.replace(/(["#])(g[01]_)/g, `$1f${index}_$2`);
+    nodes.push(`<g transform="translate(${x} ${y})">${scoped}</g>`);
   });
 
   return {
