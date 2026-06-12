@@ -188,6 +188,32 @@ export interface Epitaph {
   arc?: ArcId;
 }
 
+/** Frozen input to `composeEpitaph` — a flat, pure snapshot derived from the
+ *  dead RunState by the death reduction. The epitaph module reads ONLY this
+ *  (never RunState directly), so composition stays a pure function of summary
+ *  + seed. The reducer death-hook (Orchestrator-owned) populates every field. */
+export interface RunSummary {
+  seed: number;
+  ageAtDeathYears: number;
+  expectedLifespanYears: number; // nominal; drives cutShort/lateBloom/unbroken arcs
+  cause: "vitality" | "breakthrough" | "abandoned";
+  finalAlignment: number; // alignment.holyUnholy at death
+  alignmentCaps: { minCap: number; maxCap: number };
+  gatesCrossed: GateId[];
+  firstNotableEventYear: number | null; // earliest gate/legendary/boss age (lateBloom)
+  peakGold: number;
+  bossesFelled: number;
+  deepestDungeonIndex: number;
+  dungeonLadderSize: number; // total dungeons in the ladder (delver scoring)
+  jobYears: number; // life-years spent working a job
+  delveYears: number; // life-years spent delving
+  studyArtsKnown: number;
+  studyTopStage: number; // highest study stage reached this life (knowledge facet)
+  codexDiscoveriesThisLife: number;
+  tagCounts: Partial<Record<Tag, number>>; // tagged items/talents/traits/arts held at death
+  chronicle: ChronicleEntry[];
+}
+
 // ─── Avatar (LPC paperdoll) ──────────────────────────────────────────────────
 
 export interface LpcLayer {
