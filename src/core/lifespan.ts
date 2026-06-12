@@ -1,5 +1,11 @@
 import type { LifespanState, BiologicalStage } from "./types";
 import type { ComputedStats } from "./types";
+import { BALANCE } from "../content/balance";
+
+/** Convert raw age (seconds) to whole in-game years for the chronicle/epitaph. */
+export function ageToYears(ageSeconds: number): number {
+  return Math.floor(ageSeconds * BALANCE.yearsPerSecond);
+}
 
 // Stage thresholds as fractions of total expected life
 const STAGE_THRESHOLDS = {

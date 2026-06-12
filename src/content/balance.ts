@@ -1,3 +1,17 @@
+import type { AlignmentGate } from "../core/types";
+
+// One-way alignment ratchets. Per side, ascending tier order (the engine relies
+// on this ordering so a single large delta fires tier 1 before tier 2). See
+// docs/specs/alignment-spec.md §3.
+export const ALIGNMENT_GATES: readonly AlignmentGate[] = [
+  { id: "abyss_1", side: "abyss", threshold: -25, oppositeCap: 50 },
+  { id: "abyss_2", side: "abyss", threshold: -50, oppositeCap: 15 },
+  { id: "abyss_3", side: "abyss", threshold: -75, oppositeCap: -25 },
+  { id: "holy_1", side: "holy", threshold: 25, oppositeCap: -50 },
+  { id: "holy_2", side: "holy", threshold: 50, oppositeCap: -15 },
+  { id: "holy_3", side: "holy", threshold: 75, oppositeCap: 25 },
+];
+
 export const BALANCE = {
   maxOfflineSec: 24 * 3600,
   startingGold: 0,
@@ -34,6 +48,10 @@ export const BALANCE = {
     revealThreshold: 5,     // momentum needed per reveal attempt
   } as const,
   alignmentDriftScale: 1,
+  // In-game age conversion for the chronicle/epitaph. NOTE: lives currently run
+  // on vitality (~30 min active), not a year clock — revisit alongside lifespan
+  // tuning in the Wave 4 sim so epitaph ages read like a 60–80 year life.
+  yearsPerSecond: 7 / 60,
   itemBreakEssence: {
     common: 1,
     rare: 3,

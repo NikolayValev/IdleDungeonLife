@@ -98,6 +98,16 @@ export interface RunLogEntry {
 
 export type GateId = "abyss_1" | "abyss_2" | "abyss_3" | "holy_1" | "holy_2" | "holy_3";
 
+/** One alignment ratchet. Abyss gates fire when value ≤ threshold and lower the
+ *  opposite (max) cap; Holy gates fire when value ≥ threshold and raise the
+ *  opposite (min) cap. Listed per side in ascending tier order in balance.ts. */
+export interface AlignmentGate {
+  id: GateId;
+  side: "abyss" | "holy";
+  threshold: number; // value ≤ threshold (abyss) or ≥ threshold (holy) to cross
+  oppositeCap: number; // abyss → new maxCap; holy → new minCap (caps only narrow)
+}
+
 /** The drastic-event vocabulary: the only things loud enough to be chronicled,
  *  ceremonied, and re-render the avatar. `breakthrough` supersedes the older
  *  `studyMastered` working name from the epitaph spec. */

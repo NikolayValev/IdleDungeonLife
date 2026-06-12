@@ -7,10 +7,12 @@
   RunLogKind,
   AchievementTracker,
   MetaProgress,
+  DrasticEffect,
 } from "./types";
 import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
-import { tickLifespan, applyDungeonWear } from "./lifespan";
+import { tickLifespan, applyDungeonWear, ageToYears } from "./lifespan";
+import { applyAlignmentDelta, type GateCrossing } from "./alignment";
 import { computeStats } from "./modifiers";
 import { computeDungeonScore, resolveDungeonOutcome } from "./stats";
 import { computeLegacyAshBreakdown, computeLegacyAshReward, scoreRun } from "./scoring";
@@ -48,10 +50,6 @@ function brokenItemEssence(itemId: string): number {
   const def = ITEM_REGISTRY.get(itemId);
   if (!def) return 0;
   return BALANCE.itemBreakEssence[def.rarity];
-}
-
-function clampAlignment(v: number): number {
-  return Math.max(-100, Math.min(100, v));
 }
 
 function resourceMultiplier(value: number): number {
@@ -692,20 +690,24 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         isBoss
       );
 
-      // Alignment drift
-      let newAlignment = state.currentRun.alignment.holyUnholy;
+      // Alignment drift (routed through the gate ratchet so caps/gates update)
+      let nextAlignment = state.currentRun.alignment;
+      let gateCrossings: GateCrossing[] = [];
       if (dungeon.alignmentShiftHolyUnholy) {
-        const drift = dungeon.alignmentShiftHolyUnholy * BALANCE.alignmentDriftScale;
-        if (drift > 0) newAlignment += drift * stats.alignmentDriftHoly;
-        else newAlignment += drift * stats.alignmentDriftUnholy;
-        newAlignment = clampAlignment(newAlignment);
+        const driftBase = dungeon.alignmentShiftHolyUnholy * BALANCE.alignmentDriftScale;
+        const drift =
+          driftBase > 0 ? driftBase * stats.alignmentDriftHoly : driftBase * stats.alignmentDriftUnholy;
+        const result = applyAlignmentDelta(state.currentRun.alignment, drift);
+        nextAlignment = result.alignment;
+        gateCrossings = result.crossings;
 
         trackEvent("alignment_shifted", {
           dungeonId: dungeon.id,
           delta: drift,
-          newValue: newAlignment,
+          newValue: nextAlignment.holyUnholy,
         });
       }
+      const gateYear = ageToYears(newLifespan.ageSeconds);
 
       // Discoveries
       const newDiscoveries = new Set(state.meta.discoveredItemIds);
@@ -720,7 +722,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
       const revealBaseRun: RunState = {
         ...state.currentRun,
-        alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
+        alignment: nextAlignment,
         lifespan: newLifespan,
       };
       const dungeonReveal = revealTraitsForTrigger(revealBaseRun, "dungeonCompleted", dungeon.tags);
@@ -764,7 +766,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const dungeonEvolve = evolveTraitsForTrigger(
         {
           ...state.currentRun,
-          alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
+          alignment: nextAlignment,
           lifespan: newLifespan,
           visibleTraitIds: alignmentReveal.visibleTraitIds,
           hiddenTraitIds: alignmentReveal.hiddenTraitIds,
@@ -774,7 +776,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       );
       const postDungeonEvolveRun: RunState = {
         ...state.currentRun,
-        alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
+        alignment: nextAlignment,
         lifespan: newLifespan,
         visibleTraitIds: alignmentReveal.visibleTraitIds,
         hiddenTraitIds: alignmentReveal.hiddenTraitIds,
@@ -796,9 +798,18 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
         newCodexEntries.add(makeCodexEntryId("trait", traitId));
       }
 
+      const gateEffects: DrasticEffect[] = gateCrossings.map((crossing) => ({
+        kind: "gateCrossed",
+        year: gateYear,
+        refId: crossing.gate,
+        detail: { alignmentAtCrossing: crossing.alignmentAtCrossing, newCaps: crossing.newCaps },
+      }));
+      const carriedEffects = [...(state.transientEffects ?? []), ...gateEffects];
+
       return {
         ...state,
         subCharactersUnlocked: state.subCharactersUnlocked || newlyUnlockedSubs,
+        ...(carriedEffects.length > 0 ? { transientEffects: carriedEffects } : {}),
         meta: {
           ...state.meta,
           discoveredItemIds: [...newDiscoveries],
@@ -812,7 +823,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             currentDungeon: null,
             currentJobId: died ? null : state.currentRun.currentJobId,
             lifespan: newLifespan,
-            alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
+            alignment: nextAlignment,
             evolvedTraitIds: finalEvolvedTraitIds,
             inventory: {
               items: [...state.currentRun.inventory.items, ...loot.items].slice(
@@ -826,6 +837,14 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             deepestDungeonIndex: newDepth,
             totalDungeonsCompleted: state.currentRun.totalDungeonsCompleted + 1,
             bossesCleared: newBossesCleared,
+            chronicle: [
+              ...dungeonMomentumResult.run.chronicle,
+              ...gateCrossings.map((crossing) => ({
+                year: gateYear,
+                kind: "gateCrossed" as const,
+                refId: crossing.gate,
+              })),
+            ],
           };
           // Dungeon outcome flavor
           if (dungeon.flavor) {
