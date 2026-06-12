@@ -301,7 +301,7 @@ test("alignment-based hidden trait reveals are applied on dungeon completion", (
     ...save,
     currentRun: {
       ...save.currentRun!,
-      alignment: { holyUnholy: 34 },
+      alignment: { ...save.currentRun!.alignment, holyUnholy: 34 },
       hiddenTraitIds: ["ashen_vow"],
     },
   };
@@ -585,7 +585,7 @@ test("sorrow_herald reveal rule triggers at alignment <= -40", () => {
     ...save,
     currentRun: {
       ...save.currentRun!,
-      alignment: { holyUnholy: -35 },
+      alignment: { ...save.currentRun!.alignment, holyUnholy: -35 },
       hiddenTraitIds: ["sorrow_herald"],
     },
   };

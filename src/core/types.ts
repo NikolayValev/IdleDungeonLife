@@ -91,10 +91,118 @@ export interface RunLogEntry {
   timestampSec: number;
 }
 
+// ─── Identity Systems Vocabulary (F1 foundation) ─────────────────────────────
+// Shared, frozen vocabulary consumed by the Alignment, Epitaph/Chronicle, Study,
+// and Avatar systems. One definition of "something happened to you" — three
+// mirrors (a transient ceremony effect, a chronicle entry, an avatar re-render).
+
+export type GateId = "abyss_1" | "abyss_2" | "abyss_3" | "holy_1" | "holy_2" | "holy_3";
+
+/** The drastic-event vocabulary: the only things loud enough to be chronicled,
+ *  ceremonied, and re-render the avatar. `breakthrough` supersedes the older
+ *  `studyMastered` working name from the epitaph spec. */
+export type DrasticEventKind =
+  | "gateCrossed"
+  | "breakthrough"
+  | "traitEvolved"
+  | "legendaryFound"
+  | "bossFelled"
+  | "jobTaken"
+  | "deepestDelve"
+  | "death";
+
+/** A one-shot effect the UI consumes once to play a ceremony, then clears.
+ *  Successor to the ad-hoc `showWelcomeBack` boolean. `detail` carries
+ *  kind-specific payload frozen by each downstream wave (e.g. the alignment
+ *  wave stores `{ alignmentAtCrossing, newCaps }` for a `gateCrossed` effect). */
+export interface DrasticEffect {
+  kind: DrasticEventKind;
+  year: number; // in-game age (years) when it fired; drives the chronicle entry
+  refId?: string; // gateId | traitId | itemId | dungeonId | jobId | schoolId | artId
+  detail?: Record<string, unknown>;
+}
+
+/** Reference-based log written during a life; persists into the death record.
+ *  Distinct from `runLog` (verbose rendered strings, reset on load). Text is
+ *  rendered from templates at display time, keeping saves small. */
+export interface ChronicleEntry {
+  year: number;
+  kind: DrasticEventKind;
+  refId?: string;
+}
+
+// ─── Study System ────────────────────────────────────────────────────────────
+
+export type SchoolId = "choir" | "hollow_order" | "archive";
+export type ArtId = string;
+
+export interface SchoolProgress {
+  stage: number; // 0–5; 0 = never studied
+  refinement: number; // 0–100 toward next stage
+  bottlenecked: boolean;
+}
+
+export interface StudyState {
+  enrolled: SchoolId | null;
+  schools: Record<SchoolId, SchoolProgress>;
+  artsKnown: ArtId[];
+}
+
+// ─── Epitaph & Chronicle ─────────────────────────────────────────────────────
+
+export type FacetId =
+  | "holy"
+  | "abyss"
+  | "knowledge"
+  | "wealth"
+  | "vitality"
+  | "decay"
+  | "fate"
+  | "delver"
+  | "toiler";
+
+export type ArcId =
+  | "redeemed"
+  | "fallen"
+  | "forsaken"
+  | "sanctified"
+  | "lateBloom"
+  | "cutShort"
+  | "unbroken"
+  | "ascensionDeath";
+
+export interface Epitaph {
+  lines: string[]; // rendered at compose time for the archive
+  primaryFacet: FacetId;
+  secondaryFacet?: FacetId;
+  arc?: ArcId;
+}
+
+// ─── Avatar (LPC paperdoll) ──────────────────────────────────────────────────
+
+export interface LpcLayer {
+  sheetId: string; // e.g. 'torso/robes/hollow_initiate'
+  variant: string; // palette/color variant
+  zPos: number; // from ULPC z-positioning data
+}
+
+export interface PaletteOverride {
+  target: string; // layer/region key the override applies to
+  variant: string;
+}
+
+export interface LpcSelection {
+  layers: LpcLayer[]; // ordered by zPos
+  paletteOverrides: PaletteOverride[];
+}
+
 // ─── Core State Interfaces ───────────────────────────────────────────────────
 
 export interface AlignmentState {
-  holyUnholy: number; // -100 to +100, negative = unholy, positive = holy
+  holyUnholy: number; // current value (spec "value"), -100 (Abyss)..+100 (Holy)
+  minCap: number; // reachable floor; starts -100, raised by crossing Holy gates
+  maxCap: number; // reachable ceiling; starts +100, lowered by crossing Abyss gates
+  gatesCrossed: GateId[]; // ordered crossing history, for chronicle/epitaph/avatar
 }
 
 export interface LifespanState {
@@ -155,6 +263,10 @@ export interface RunState {
   totalDungeonsCompleted: number;
   bossesCleared: string[];
   runLog: RunLogEntry[];
+  // ─── Identity systems (F1 shells; behavior added in later waves) ───
+  chronicle: ChronicleEntry[]; // reference-based drastic-event log; persists into the death record
+  study: StudyState; // occupation runs alongside currentJobId (study pauses job income — Wave 2b)
+  appearanceSelection?: LpcSelection; // recomputable avatar cache; omitted until Wave 3 populates it
 }
 
 export interface MetaProgress {
@@ -229,6 +341,7 @@ export interface SaveFile {
   subCharactersUnlocked: boolean; // true once the first character clears the final dungeon
   achievements: AchievementTracker;
   showWelcomeBack?: boolean; // transient: set by reconcileOffline, cleared after display
+  transientEffects?: DrasticEffect[]; // transient: drastic-event ceremony queue, drained by the UI
 }
 
 export interface PlaythroughTimelineEvent {
@@ -271,6 +384,11 @@ export interface PlaythroughRecord {
   finalScore: PlaythroughScoreSummary;
   legacyAsh: PlaythroughLegacyAsh;
   timeline: PlaythroughTimelineEvent[];
+  // ─── Past-life identity (F1 shells; populated at death by later waves) ───
+  epitaph?: Epitaph; // generated death epitaph (Wave 2a)
+  chronicle?: ChronicleEntry[]; // snapshot of the run's chronicle at death
+  appearanceSelection?: LpcSelection; // avatar selection, for lazy Codex portrait re-render
+  notable?: boolean; // pinned against retention pruning (tier-3 gate or top-3 ash)
 }
 
 export interface PlaythroughArchive {

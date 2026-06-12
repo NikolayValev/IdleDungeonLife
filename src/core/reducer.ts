@@ -15,7 +15,7 @@ import { computeStats } from "./modifiers";
 import { computeDungeonScore, resolveDungeonOutcome } from "./stats";
 import { computeLegacyAshBreakdown, computeLegacyAshReward, scoreRun } from "./scoring";
 import { resetAnalyticsTimeline, snapshotAnalyticsTimeline, trackEvent } from "./analytics";
-import { appendPlaythroughRecord } from "./save";
+import { appendPlaythroughRecord, emptyStudyState } from "./save";
 import { TRAIT_REGISTRY, TRAITS } from "../content/traits";
 import { JOB_REGISTRY } from "../content/jobs";
 import { DUNGEON_REGISTRY, FINAL_DUNGEON } from "../content/dungeons";
@@ -279,7 +279,7 @@ function buildNewRun(seed: number, nowUnixSec: number, meta?: MetaProgress): Run
   return {
     seed,
     alive: true,
-    alignment: { holyUnholy: 0 },
+    alignment: { holyUnholy: 0, minCap: -100, maxCap: 100, gatesCrossed: [] },
     lifespan: { ageSeconds: 0, vitality: 100, stage: "youth" },
     visibleTraitIds,
     hiddenTraitIds,
@@ -301,6 +301,8 @@ function buildNewRun(seed: number, nowUnixSec: number, meta?: MetaProgress): Run
     totalDungeonsCompleted: 0,
     bossesCleared: [],
     runLog: [],
+    chronicle: [],
+    study: emptyStudyState(),
   };
 }
 
@@ -718,7 +720,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
 
       const revealBaseRun: RunState = {
         ...state.currentRun,
-        alignment: { holyUnholy: newAlignment },
+        alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
         lifespan: newLifespan,
       };
       const dungeonReveal = revealTraitsForTrigger(revealBaseRun, "dungeonCompleted", dungeon.tags);
@@ -762,7 +764,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const dungeonEvolve = evolveTraitsForTrigger(
         {
           ...state.currentRun,
-          alignment: { holyUnholy: newAlignment },
+          alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
           lifespan: newLifespan,
           visibleTraitIds: alignmentReveal.visibleTraitIds,
           hiddenTraitIds: alignmentReveal.hiddenTraitIds,
@@ -772,7 +774,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       );
       const postDungeonEvolveRun: RunState = {
         ...state.currentRun,
-        alignment: { holyUnholy: newAlignment },
+        alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
         lifespan: newLifespan,
         visibleTraitIds: alignmentReveal.visibleTraitIds,
         hiddenTraitIds: alignmentReveal.hiddenTraitIds,
@@ -810,7 +812,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
             currentDungeon: null,
             currentJobId: died ? null : state.currentRun.currentJobId,
             lifespan: newLifespan,
-            alignment: { holyUnholy: newAlignment },
+            alignment: { ...state.currentRun.alignment, holyUnholy: newAlignment },
             evolvedTraitIds: finalEvolvedTraitIds,
             inventory: {
               items: [...state.currentRun.inventory.items, ...loot.items].slice(

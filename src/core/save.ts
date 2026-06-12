@@ -1,9 +1,17 @@
 import type {
   ActiveDungeonState,
   AchievementTracker,
+  AlignmentState,
   BiologicalStage,
+  ArcId,
+  ChronicleEntry,
+  DrasticEventKind,
+  Epitaph,
   EquipmentState,
+  FacetId,
+  GateId,
   ItemInstance,
+  LpcSelection,
   MetaProgress,
   PlaythroughArchive,
   PlaythroughLegacyAsh,
@@ -12,13 +20,16 @@ import type {
   PlaythroughTimelineEvent,
   RunState,
   SaveFile,
+  SchoolId,
+  SchoolProgress,
+  StudyState,
   SubCharacter,
 } from "./types";
 import { DUNGEON_REGISTRY, FINAL_DUNGEON } from "../content/dungeons";
 import { ITEM_REGISTRY } from "../content/items";
 
 const SAVE_KEY = "idledungeonlife_save";
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const PLAYTHROUGH_ARCHIVE_VERSION = 1;
 export const PLAYTHROUGH_ARCHIVE_MAX_RECORDS = 100;
 
@@ -95,6 +106,153 @@ function migrateInventoryItems(value: unknown): ItemInstance[] {
 
 function validLegacyPath(value: unknown): "holy" | "abyss" | "knowledge" | null {
   return value === "holy" || value === "abyss" || value === "knowledge" ? value : null;
+}
+
+// ─── Identity-systems migration (F1) ─────────────────────────────────────────
+
+const VALID_GATES: readonly string[] = [
+  "abyss_1",
+  "abyss_2",
+  "abyss_3",
+  "holy_1",
+  "holy_2",
+  "holy_3",
+];
+const VALID_SCHOOLS: readonly string[] = ["choir", "hollow_order", "archive"];
+const VALID_DRASTIC_KINDS: readonly string[] = [
+  "gateCrossed",
+  "breakthrough",
+  "traitEvolved",
+  "legendaryFound",
+  "bossFelled",
+  "jobTaken",
+  "deepestDelve",
+  "death",
+];
+
+function clampNumber(value: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, value));
+}
+
+function migrateAlignment(value: unknown): AlignmentState {
+  const raw = isRecord(value) ? value : {};
+  // Legacy saves carry only `holyUnholy`: value preserved, caps full-range, no history.
+  const minCap = clampNumber(finiteNumber(raw.minCap, -100), -100, 100);
+  const maxCap = clampNumber(finiteNumber(raw.maxCap, 100), minCap, 100);
+  const holyUnholy = clampNumber(finiteNumber(raw.holyUnholy, 0), minCap, maxCap);
+  const gatesCrossed = Array.isArray(raw.gatesCrossed)
+    ? raw.gatesCrossed.filter((g): g is GateId => typeof g === "string" && VALID_GATES.includes(g))
+    : [];
+  return { holyUnholy, minCap, maxCap, gatesCrossed };
+}
+
+function migrateChronicle(value: unknown): ChronicleEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .filter((entry) => typeof entry.kind === "string" && VALID_DRASTIC_KINDS.includes(entry.kind))
+    .map((entry) => ({
+      year: Math.max(0, finiteNumber(entry.year, 0)),
+      kind: entry.kind as DrasticEventKind,
+      ...(typeof entry.refId === "string" ? { refId: entry.refId } : {}),
+    }));
+}
+
+function migrateSchoolProgress(value: unknown): SchoolProgress {
+  const raw = isRecord(value) ? value : {};
+  return {
+    stage: clampNumber(Math.floor(finiteNumber(raw.stage, 0)), 0, 5),
+    refinement: clampNumber(finiteNumber(raw.refinement, 0), 0, 100),
+    bottlenecked: raw.bottlenecked === true,
+  };
+}
+
+function migrateStudy(value: unknown): StudyState {
+  const raw = isRecord(value) ? value : {};
+  const schoolsRaw = isRecord(raw.schools) ? raw.schools : {};
+  return {
+    enrolled:
+      typeof raw.enrolled === "string" && VALID_SCHOOLS.includes(raw.enrolled)
+        ? (raw.enrolled as SchoolId)
+        : null,
+    schools: {
+      choir: migrateSchoolProgress(schoolsRaw.choir),
+      hollow_order: migrateSchoolProgress(schoolsRaw.hollow_order),
+      archive: migrateSchoolProgress(schoolsRaw.archive),
+    },
+    artsKnown: uniqueStrings(raw.artsKnown),
+  };
+}
+
+function migrateAppearanceSelection(value: unknown): LpcSelection | undefined {
+  if (!isRecord(value) || !Array.isArray(value.layers) || !Array.isArray(value.paletteOverrides)) {
+    return undefined;
+  }
+  const layers = value.layers
+    .filter(isRecord)
+    .filter((l) => typeof l.sheetId === "string" && typeof l.variant === "string")
+    .map((l) => ({
+      sheetId: l.sheetId as string,
+      variant: l.variant as string,
+      zPos: finiteNumber(l.zPos, 0),
+    }));
+  const paletteOverrides = value.paletteOverrides
+    .filter(isRecord)
+    .filter((p) => typeof p.target === "string" && typeof p.variant === "string")
+    .map((p) => ({ target: p.target as string, variant: p.variant as string }));
+  return { layers, paletteOverrides };
+}
+
+const VALID_FACETS: readonly string[] = [
+  "holy",
+  "abyss",
+  "knowledge",
+  "wealth",
+  "vitality",
+  "decay",
+  "fate",
+  "delver",
+  "toiler",
+];
+const VALID_ARCS: readonly string[] = [
+  "redeemed",
+  "fallen",
+  "forsaken",
+  "sanctified",
+  "lateBloom",
+  "cutShort",
+  "unbroken",
+  "ascensionDeath",
+];
+
+function migrateEpitaph(value: unknown): Epitaph | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!hasStringArray(value.lines)) return undefined;
+  if (typeof value.primaryFacet !== "string" || !VALID_FACETS.includes(value.primaryFacet)) {
+    return undefined;
+  }
+  return {
+    lines: value.lines,
+    primaryFacet: value.primaryFacet as FacetId,
+    ...(typeof value.secondaryFacet === "string" && VALID_FACETS.includes(value.secondaryFacet)
+      ? { secondaryFacet: value.secondaryFacet as FacetId }
+      : {}),
+    ...(typeof value.arc === "string" && VALID_ARCS.includes(value.arc)
+      ? { arc: value.arc as ArcId }
+      : {}),
+  };
+}
+
+export function emptyStudyState(): StudyState {
+  return {
+    enrolled: null,
+    schools: {
+      choir: { stage: 0, refinement: 0, bottlenecked: false },
+      hollow_order: { stage: 0, refinement: 0, bottlenecked: false },
+      archive: { stage: 0, refinement: 0, bottlenecked: false },
+    },
+    artsKnown: [],
+  };
 }
 
 function emptyPlaythroughArchive(maxRecords = PLAYTHROUGH_ARCHIVE_MAX_RECORDS): PlaythroughArchive {
@@ -187,6 +345,10 @@ function migratePlaythroughRecord(
         .filter((entry): entry is PlaythroughTimelineEvent => entry !== null)
     : [];
 
+  const epitaph = migrateEpitaph(value.epitaph);
+  const chronicle = migrateChronicle(value.chronicle);
+  const appearanceSelection = migrateAppearanceSelection(value.appearanceSelection);
+
   return {
     id: value.id,
     recordVersion: Math.max(1, Math.floor(finiteNumber(value.recordVersion, 1))),
@@ -198,6 +360,10 @@ function migratePlaythroughRecord(
     finalScore: migrateScoreSummary(value.finalScore),
     legacyAsh: migrateLegacyAsh(value.legacyAsh),
     timeline,
+    ...(epitaph ? { epitaph } : {}),
+    ...(chronicle.length > 0 ? { chronicle } : {}),
+    ...(appearanceSelection ? { appearanceSelection } : {}),
+    ...(value.notable === true ? { notable: true } : {}),
   };
 }
 
@@ -262,13 +428,12 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
 
   const talents = isRecord(value.talents) ? value.talents : {};
   const inventoryItems = migrateInventoryItems(value.inventory.items);
+  const appearanceSelection = migrateAppearanceSelection(value.appearanceSelection);
 
   return {
     seed: finiteNumber(value.seed, 0),
     alive: value.alive,
-    alignment: {
-      holyUnholy: finiteNumber(value.alignment.holyUnholy, 0),
-    },
+    alignment: migrateAlignment(value.alignment),
     lifespan: {
       ageSeconds: nonNegativeNumber(value.lifespan.ageSeconds, 0),
       vitality: Math.max(0, Math.min(100, finiteNumber(value.lifespan.vitality, 100))),
@@ -298,6 +463,9 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
     totalDungeonsCompleted: nonNegativeNumber(value.totalDungeonsCompleted, 0),
     bossesCleared: uniqueStrings(value.bossesCleared),
     runLog: [],
+    chronicle: migrateChronicle(value.chronicle),
+    study: migrateStudy(value.study),
+    ...(appearanceSelection ? { appearanceSelection } : {}),
   };
 }
 
