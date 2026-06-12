@@ -52,6 +52,9 @@ export const BALANCE = {
   // on vitality (~30 min active), not a year clock — revisit alongside lifespan
   // tuning in the Wave 4 sim so epitaph ages read like a 60–80 year life.
   yearsPerSecond: 7 / 60,
+  // Nominal expected lifespan in years, used only for epitaph arc fractions
+  // (cutShort/lateBloom/unbroken). Same lifespan-modeling caveat as yearsPerSecond.
+  expectedLifespanYears: 70,
   itemBreakEssence: {
     common: 1,
     rare: 3,

@@ -13,6 +13,9 @@ import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
 import { tickLifespan, applyDungeonWear, ageToYears } from "./lifespan";
 import { applyAlignmentDelta, type GateCrossing } from "./alignment";
+import { composeEpitaph, trimChronicle } from "./epitaph";
+import { buildRunSummary } from "./runSummary";
+import { CHRONICLE_CAP } from "../content/epitaphs";
 import { computeStats } from "./modifiers";
 import { computeDungeonScore, resolveDungeonOutcome } from "./stats";
 import { computeLegacyAshBreakdown, computeLegacyAshReward, scoreRun } from "./scoring";
@@ -1182,13 +1185,23 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       ]).size;
       const runScore = scoreRun(run, discoveryCount);
       const timeline = snapshotAnalyticsTimeline(true);
+
+      // Terminal chronicle entry, then compose the deterministic epitaph.
+      const deathYear = ageToYears(run.lifespan.ageSeconds);
+      const chronicleWithDeath = [...run.chronicle, { year: deathYear, kind: "death" as const }];
+      const finalRun: RunState = { ...run, chronicle: chronicleWithDeath };
+      // cause is "vitality" for a normal death; the study breakthrough toll-kill
+      // path will pass "breakthrough" (→ ascensionDeath arc) once it is wired.
+      const summary = buildRunSummary(finalRun, nextMeta, "vitality");
+      const epitaph = composeEpitaph(summary, run.seed);
+
       const playthroughRecord = {
         id: makePlaythroughId(run, event.nowUnixSec, state.meta.totalRuns),
         recordVersion: 1,
         recordedAtUnixSec: event.nowUnixSec,
         seed: run.seed,
         outcome: "death" as const,
-        finalRun: run,
+        finalRun,
         finalMeta: nextMeta,
         finalScore: runScore,
         legacyAsh: {
@@ -1198,6 +1211,8 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
           momentumBonus,
         },
         timeline,
+        epitaph,
+        chronicle: trimChronicle(chronicleWithDeath, CHRONICLE_CAP),
       };
 
       const runBossCount = run.bossesCleared.length;
