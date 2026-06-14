@@ -1,5 +1,16 @@
 import type { AlignmentGate } from "../core/types";
 
+// Lifespan/age model: death is vitality-based (~100 vitality over the baseline
+// life at BASE_VITALITY_DECAY_PER_SEC = 100/(30*60)). We derive the in-game year
+// clock so a baseline life reads as EXPECTED_LIFESPAN_YEARS; survivability/study
+// that extend time-alive therefore read as more years. Wall-clock life *length*
+// (the spec's 10-min target vs the current ~30-min) is a separate decay-tuning
+// knob, intentionally left alone here. Keep BASELINE_LIFE_SECONDS in sync if the
+// decay constant in lifespan.ts changes (kept as a literal to avoid a balance↔
+// lifespan import cycle).
+const EXPECTED_LIFESPAN_YEARS = 70;
+const BASELINE_LIFE_SECONDS = 100 / (100 / (30 * 60)); // = 1800
+
 // One-way alignment ratchets. Per side, ascending tier order (the engine relies
 // on this ordering so a single large delta fires tier 1 before tier 2). See
 // docs/specs/alignment-spec.md §3.
@@ -48,13 +59,11 @@ export const BALANCE = {
     revealThreshold: 5,     // momentum needed per reveal attempt
   } as const,
   alignmentDriftScale: 1,
-  // In-game age conversion for the chronicle/epitaph. NOTE: lives currently run
-  // on vitality (~30 min active), not a year clock — revisit alongside lifespan
-  // tuning in the Wave 4 sim so epitaph ages read like a 60–80 year life.
-  yearsPerSecond: 7 / 60,
-  // Nominal expected lifespan in years, used only for epitaph arc fractions
-  // (cutShort/lateBloom/unbroken). Same lifespan-modeling caveat as yearsPerSecond.
-  expectedLifespanYears: 70,
+  // In-game years per real second, derived so a baseline life ≈ expectedLifespanYears.
+  yearsPerSecond: EXPECTED_LIFESPAN_YEARS / BASELINE_LIFE_SECONDS,
+  // Nominal expected lifespan in years (epitaph arc fractions + breakthrough
+  // lifespan→vitality mapping at 100/expectedLifespanYears per year).
+  expectedLifespanYears: EXPECTED_LIFESPAN_YEARS,
   itemBreakEssence: {
     common: 1,
     rare: 3,

@@ -31,7 +31,8 @@ test("studying accrues refinement, deducts gold upkeep, and clamps at the bottle
   save = reduceGame(save, { type: "ASSIGN_STUDY", schoolId: "choir" });
 
   const goldBefore = save.currentRun!.resources.gold;
-  save = reduceGame(save, { type: "TICK", nowUnixSec: 1060 });
+  // Study long enough to fill the meter at the derived year rate.
+  save = reduceGame(save, { type: "TICK", nowUnixSec: 1300 });
 
   const choir = save.currentRun!.study.schools.choir;
   expect(choir.refinement).toBe(100);
