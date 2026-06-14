@@ -2,6 +2,8 @@ import type { SaveFile, RunState, ComputedStats } from "../core/types";
 import type { GameEvent } from "../core/events";
 import { computeStats } from "../core/modifiers";
 import { computeDungeonScore, resolveDungeonOutcome } from "../core/stats";
+import { checkBreakthroughReadiness } from "../core/study";
+import { ageToYears } from "../core/lifespan";
 import { DUNGEONS } from "../content/dungeons";
 import { TALENTS } from "../content/talents";
 import { ITEM_REGISTRY } from "../content/items";
@@ -13,6 +15,8 @@ export type PolicyAction =
       {
         type:
           | "ASSIGN_JOB"
+          | "ASSIGN_STUDY"
+          | "PERFORM_BREAKTHROUGH"
           | "START_DUNGEON"
           | "EQUIP_ITEM"
           | "UNLOCK_TALENT"
@@ -293,5 +297,63 @@ export class AggressivePolicy implements Policy {
       bestJobAction(save) ??
       bestItemAction(save)
     );
+  }
+}
+
+/**
+ * Study-focused policy: enrolls at the Archive and cycles work↔study to fund
+ * upkeep, breaking through whenever conditions are met. Exercises the study
+ * system in the diversity check (should trend toward a knowledge-primary,
+ * longer-lived epitaph).
+ */
+const STUDY_LOW_GOLD = 200; // below this, work a job to fund upkeep
+const STUDY_FLUSH_GOLD = 600; // above this, switch back to studying
+
+function highestIncomeJobId(save: SaveFile): string | null {
+  let best: { jobId: string; score: number } | null = null;
+  for (const jobId of save.meta.unlockedJobIds) {
+    const job = JOB_REGISTRY.get(jobId);
+    if (!job) continue;
+    const score = job.baseGoldPerSec * 10 + (job.baseEssencePerSec ?? 0) * 40;
+    if (!best || score > best.score) best = { jobId, score };
+  }
+  return best?.jobId ?? null;
+}
+
+export class StudyFocusedPolicy implements Policy {
+  decide(save: SaveFile, nowUnixSec: number): PolicyAction {
+    const run = save.currentRun;
+    if (!run?.alive) return null;
+
+    // 1. Break through whenever the conditions are satisfied.
+    if (run.study.enrolled) {
+      const readiness = checkBreakthroughReadiness(
+        run.study,
+        run.alignment.holyUnholy,
+        [],
+        run.bossesCleared,
+        ageToYears(run.lifespan.ageSeconds)
+      );
+      if (readiness.ready) return { type: "PERFORM_BREAKTHROUGH", nowUnixSec };
+    }
+
+    // 2. Keep unlocking jobs/dungeons (income + boss access for conditions).
+    const unlock = bestUnlockAction(save);
+    if (unlock) return unlock;
+
+    // 3. Fund upkeep: work when low on gold, study when flush.
+    if (run.resources.gold < STUDY_LOW_GOLD) {
+      if (run.occupation !== "job") {
+        const jobId = highestIncomeJobId(save);
+        if (jobId) return { type: "ASSIGN_JOB", jobId };
+      }
+    } else if (run.resources.gold >= STUDY_FLUSH_GOLD) {
+      if (run.occupation !== "study" || run.study.enrolled !== "archive") {
+        return { type: "ASSIGN_STUDY", schoolId: "archive" };
+      }
+    }
+
+    // 4. Otherwise improve gear / delve for depth, bosses, discovery.
+    return bestItemAction(save) ?? bestDungeonAction(save, nowUnixSec);
   }
 }
