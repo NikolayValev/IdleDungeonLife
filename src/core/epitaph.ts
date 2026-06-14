@@ -190,7 +190,11 @@ function detectArc(summary: RunSummary): ArcId | undefined {
     ageAtDeathYears,
     expectedLifespanYears,
     firstNotableEventYear,
+    cause,
   } = summary;
+
+  // Death cause overrides: dying mid-breakthrough is the story.
+  if (cause === "breakthrough") return "ascensionDeath";
 
   const crossedAbyss = gatesCrossed.some((g) => g.startsWith("abyss_"));
   const crossedHoly = gatesCrossed.some((g) => g.startsWith("holy_"));

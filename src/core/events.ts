@@ -1,9 +1,13 @@
 // ─── Game Events ──────────────────────────────────────────────────────────────
 
+import type { SchoolId } from "./types";
+
 export type GameEvent =
   | { type: "START_NEW_RUN"; nowUnixSec: number; seed?: number }
   | { type: "TICK"; nowUnixSec: number }
   | { type: "ASSIGN_JOB"; jobId: string }
+  | { type: "ASSIGN_STUDY"; schoolId: SchoolId }
+  | { type: "PERFORM_BREAKTHROUGH"; nowUnixSec: number }
   | { type: "UNLOCK_JOB"; jobId: string }
   | { type: "UNLOCK_DUNGEON"; dungeonId: string }
   | { type: "START_DUNGEON"; dungeonId: string; nowUnixSec: number }

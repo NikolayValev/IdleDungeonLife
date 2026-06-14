@@ -219,6 +219,7 @@ test("active job modifiers are included in computed stats", () => {
     currentRun: {
       ...save.currentRun!,
       currentJobId: "scavenger",
+      occupation: "job",
     },
   };
 
@@ -250,6 +251,7 @@ test("essenceRate affects live job income", () => {
     currentRun: {
       ...save.currentRun!,
       currentJobId: "scribe",
+      occupation: "job",
     },
   };
 

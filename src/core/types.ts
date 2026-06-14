@@ -294,6 +294,8 @@ export interface RunState {
   resources: ResourceState;
   currentDungeon: ActiveDungeonState | null;
   currentJobId: string | null;
+  occupation: "job" | "study" | "idle"; // the one occupation slot; currentJobId is the job detail
+  deathCause?: "vitality" | "breakthrough"; // set at death; "breakthrough" → ascensionDeath epitaph arc
   lastTickUnixSec: number;
   deepestDungeonIndex: number;
   totalDungeonsCompleted: number;

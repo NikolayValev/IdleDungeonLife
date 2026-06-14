@@ -458,6 +458,15 @@ function migrateRun(value: unknown, fallbackNowUnixSec: number): RunState | null
     },
     currentDungeon: migrateActiveDungeon(value.currentDungeon),
     currentJobId: typeof value.currentJobId === "string" ? value.currentJobId : null,
+    occupation:
+      value.occupation === "study" || value.occupation === "idle" || value.occupation === "job"
+        ? value.occupation
+        : typeof value.currentJobId === "string"
+          ? "job"
+          : "idle",
+    ...(value.deathCause === "vitality" || value.deathCause === "breakthrough"
+      ? { deathCause: value.deathCause }
+      : {}),
     lastTickUnixSec: finiteNumber(value.lastTickUnixSec, fallbackNowUnixSec),
     deepestDungeonIndex: finiteNumber(value.deepestDungeonIndex, -1),
     totalDungeonsCompleted: nonNegativeNumber(value.totalDungeonsCompleted, 0),

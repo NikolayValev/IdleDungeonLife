@@ -11,11 +11,19 @@
 } from "./types";
 import type { GameEvent } from "./events";
 import { SeededRandomProvider, deriveSeed } from "./rng";
-import { tickLifespan, applyDungeonWear, ageToYears } from "./lifespan";
+import { tickLifespan, applyDungeonWear, ageToYears, calculateStage } from "./lifespan";
 import { applyAlignmentDelta, type GateCrossing } from "./alignment";
 import { composeEpitaph, trimChronicle } from "./epitaph";
 import { buildRunSummary } from "./runSummary";
 import { CHRONICLE_CAP } from "../content/epitaphs";
+import {
+  enroll,
+  accrueRefinement,
+  checkBreakthroughReadiness,
+  performBreakthrough,
+  computeDriftContribution,
+} from "./study";
+import { STUDY_UPKEEP_PER_YEAR, ARCHIVE_DRIFT_DAMPEN_FACTOR } from "../content/schools";
 import { computeStats } from "./modifiers";
 import { computeDungeonScore, resolveDungeonOutcome } from "./stats";
 import { computeLegacyAshBreakdown, computeLegacyAshReward, scoreRun } from "./scoring";
@@ -297,6 +305,7 @@ function buildNewRun(seed: number, nowUnixSec: number, meta?: MetaProgress): Run
     },
     currentDungeon: null,
     currentJobId: null,
+    occupation: "idle",
     lastTickUnixSec: nowUnixSec,
     deepestDungeonIndex: -1,
     totalDungeonsCompleted: 0,
@@ -322,8 +331,8 @@ function applyTick(run: RunState, nowUnixSec: number, achievements?: Achievement
   let updated = { ...run, lastTickUnixSec: nowUnixSec };
   const stats = computeStats(updated, { achievements });
 
-  // Job income
-  if (updated.currentJobId) {
+  // Job income (only while the occupation slot is on a job)
+  if (updated.occupation === "job" && updated.currentJobId) {
     const job = JOB_REGISTRY.get(updated.currentJobId);
     if (job) {
       const goldMultiplier =
@@ -341,12 +350,57 @@ function applyTick(run: RunState, nowUnixSec: number, achievements?: Achievement
     }
   }
 
+  // Study refinement (only while studying and not delving; stalls when gold runs
+  // out, caps at the bottleneck, never auto-breaks through). Same path online and
+  // offline. NOTE: gate crossings from study drift update caps + chronicle here,
+  // but the ceremony transient effect for tick/offline drift is surfaced on
+  // welcome-back (Wave 4), not emitted from applyTick.
+  if (updated.occupation === "study" && updated.study.enrolled && !updated.currentDungeon) {
+    const elapsedYears = elapsed * BALANCE.yearsPerSecond;
+    const affordableYears =
+      STUDY_UPKEEP_PER_YEAR > 0
+        ? Math.min(elapsedYears, updated.resources.gold / STUDY_UPKEEP_PER_YEAR)
+        : elapsedYears;
+    if (affordableYears > 0) {
+      const cost = affordableYears * STUDY_UPKEEP_PER_YEAR;
+      const accrued = accrueRefinement(updated.study, affordableYears, []);
+
+      const driftPerYear = computeDriftContribution(updated.study.enrolled).driftPerYear;
+      let alignment = updated.alignment;
+      let chronicle = updated.chronicle;
+      if (driftPerYear !== 0) {
+        const result = applyAlignmentDelta(updated.alignment, driftPerYear * affordableYears);
+        alignment = result.alignment;
+        if (result.crossings.length > 0) {
+          const yr = ageToYears(updated.lifespan.ageSeconds);
+          chronicle = [
+            ...chronicle,
+            ...result.crossings.map((c) => ({
+              year: yr,
+              kind: "gateCrossed" as const,
+              refId: c.gate,
+            })),
+          ];
+        }
+      }
+
+      updated = {
+        ...updated,
+        study: accrued.state,
+        alignment,
+        chronicle,
+        resources: { ...updated.resources, gold: updated.resources.gold - cost },
+      };
+    }
+  }
+
   // Lifespan decay
   const { lifespan, died } = tickLifespan(updated.lifespan, stats, elapsed);
   updated = {
     ...updated,
     lifespan,
     currentJobId: died ? null : updated.currentJobId,
+    occupation: died ? "idle" : updated.occupation,
   };
 
   if (died) {
@@ -571,7 +625,82 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       if (!state.meta.unlockedJobIds.includes(event.jobId)) return state;
       return {
         ...state,
-        currentRun: { ...state.currentRun, currentJobId: event.jobId },
+        currentRun: { ...state.currentRun, currentJobId: event.jobId, occupation: "job" },
+      };
+    }
+
+    case "ASSIGN_STUDY": {
+      if (!state.currentRun?.alive) return state;
+      const result = enroll(
+        state.currentRun.study,
+        event.schoolId,
+        state.currentRun.alignment.gatesCrossed
+      );
+      // Barred enrollment (gate locked the school) is a silent no-op; the UI
+      // surfaces the sealed door. Prior arts/progress are untouched by enroll().
+      if (result.rejectedReason !== null) return state;
+      return {
+        ...state,
+        currentRun: {
+          ...state.currentRun,
+          study: result.state,
+          occupation: "study",
+          currentJobId: null,
+        },
+      };
+    }
+
+    case "PERFORM_BREAKTHROUGH": {
+      if (!state.currentRun?.alive) return state;
+      const run = state.currentRun;
+      if (run.study.enrolled === null) return state;
+
+      const ageYears = ageToYears(run.lifespan.ageSeconds);
+      const readiness = checkBreakthroughReadiness(
+        run.study,
+        run.alignment.holyUnholy,
+        [], // manual acquisition (loot drops) not yet wired — stages 4–5 await it
+        run.bossesCleared,
+        ageYears
+      );
+      if (!readiness.ready) return state; // UI shows unmetHints; no state change
+
+      const schoolId = run.study.enrolled;
+      const { state: nextStudy, deltas } = performBreakthrough(run.study);
+      const year = ageYears;
+
+      // Vitality toll (percent of max = points on the 0–100 scale); may be fatal.
+      const afterToll = Math.max(0, run.lifespan.vitality - deltas.vitalityTollPct);
+      const died = afterToll <= 0;
+      // Lifespan grant → vitality on the current vitality model (1 year ≈
+      // 100/expectedLifespan points). Proper lifespan extension awaits the Wave 4
+      // lifespan-model decision; flagged.
+      const vitalityPerYear = 100 / BALANCE.expectedLifespanYears;
+      const grantedVitality = died ? 0 : deltas.lifespanGrantYears * vitalityPerYear;
+      const newVitality = Math.min(100, afterToll + grantedVitality);
+
+      const effect: DrasticEffect = {
+        kind: "breakthrough",
+        year,
+        refId: schoolId,
+        detail: { toStage: nextStudy.schools[schoolId].stage, artsGained: deltas.artsGained },
+      };
+
+      return {
+        ...state,
+        transientEffects: [...(state.transientEffects ?? []), effect],
+        currentRun: {
+          ...run,
+          study: nextStudy,
+          lifespan: {
+            ...run.lifespan,
+            vitality: newVitality,
+            stage: calculateStage(newVitality),
+          },
+          alive: !died,
+          ...(died ? { occupation: "idle" as const, currentJobId: null, deathCause: "breakthrough" as const } : {}),
+          chronicle: [...run.chronicle, { year, kind: "breakthrough", refId: schoolId }],
+        },
       };
     }
 
@@ -698,8 +827,13 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       let gateCrossings: GateCrossing[] = [];
       if (dungeon.alignmentShiftHolyUnholy) {
         const driftBase = dungeon.alignmentShiftHolyUnholy * BALANCE.alignmentDriftScale;
-        const drift =
+        const affinityDrift =
           driftBase > 0 ? driftBase * stats.alignmentDriftHoly : driftBase * stats.alignmentDriftUnholy;
+        // Enrolling at the Archive dampens all external drift (study-spec §3).
+        const drift =
+          state.currentRun.study.enrolled === "archive"
+            ? affinityDrift * ARCHIVE_DRIFT_DAMPEN_FACTOR
+            : affinityDrift;
         const result = applyAlignmentDelta(state.currentRun.alignment, drift);
         nextAlignment = result.alignment;
         gateCrossings = result.crossings;
@@ -1192,7 +1326,7 @@ export function reduceGame(state: SaveFile, event: GameEvent): SaveFile {
       const finalRun: RunState = { ...run, chronicle: chronicleWithDeath };
       // cause is "vitality" for a normal death; the study breakthrough toll-kill
       // path will pass "breakthrough" (→ ascensionDeath arc) once it is wired.
-      const summary = buildRunSummary(finalRun, nextMeta, "vitality");
+      const summary = buildRunSummary(finalRun, nextMeta, run.deathCause ?? "vitality");
       const epitaph = composeEpitaph(summary, run.seed);
 
       const playthroughRecord = {
