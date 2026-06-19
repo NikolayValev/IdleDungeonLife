@@ -54,6 +54,16 @@ export class HudScene extends BaseScene {
       callbackScope: this,
       loop: true,
     });
+
+    const help = this.add
+      .text(LAYOUT.width - 18, 4, "?", {
+        fontFamily: FONTS.body,
+        fontSize: "16px",
+        color: COLORS.textSecondary,
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true });
+    help.on("pointerup", () => this.scene.run("IntroScene"));
   }
 
   private onTick(): void {

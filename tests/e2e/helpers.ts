@@ -93,6 +93,17 @@ export async function resetApp(page: Page): Promise<void> {
     location.reload();
   });
   await waitForHooks(page);
+  // If the welcome overlay is showing (fresh install), start playing so tests
+  // land on MainScene as before.
+  await page.evaluate(() => {
+    const game = (window as any).__game;
+    const intro = game?.scene?.getScene?.("IntroScene");
+    if (intro && intro.scene.isActive()) {
+      const btn = intro.children.list.find((c: { text?: string }) => c.text === "[ Play ]");
+      btn?.emit("pointerup");
+    }
+  });
+  await page.waitForTimeout(300);
 }
 
 export async function getState(page: Page): Promise<AppState> {

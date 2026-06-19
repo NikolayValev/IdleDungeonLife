@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { GameController } from "./game";
+import { IntroScene } from "../ui/scenes/IntroScene";
+import { DemoScene } from "../ui/scenes/DemoScene";
 import { HudScene } from "../ui/scenes/HudScene";
 import { MainScene } from "../ui/scenes/MainScene";
 import { JobsScene } from "../ui/scenes/JobsScene";
@@ -14,8 +16,6 @@ import { LAYOUT } from "../ui/theme";
 import { createDebugActions, registerDebugKeys } from "./debug";
 import { saveToDisk } from "../core/save";
 import type { SaveFile } from "../core/types";
-import { advanceRun } from "../sim/step";
-import { advanceSubCharacters } from "../sim/subRunner";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -46,6 +46,8 @@ const config: Phaser.Types.Core.GameConfig = {
     DeathScene,
     SubCharactersScene,
     AchievementsScene,
+    IntroScene,
+    DemoScene,
     HudScene,
   ],
 };
@@ -159,12 +161,7 @@ function installDevHooks(
       restartActiveScenes(game);
     },
     advanceTime: (ms) => {
-      const seconds = Math.max(1, Math.round(ms / 1000));
-      const start =
-        game.saveFile.currentRun?.lastTickUnixSec ?? game.saveFile.updatedAtUnixSec;
-      const advanced = advanceRun(game.saveFile, start, seconds, 1);
-      const withSubs = advanceSubCharacters(advanced, start + seconds, 10);
-      setSave(withSubs);
+      game.advanceTime(ms);
       restartActiveScenes(game);
       return game.saveFile;
     },
@@ -187,13 +184,16 @@ export function bootstrap(): GameController {
 
   const nowUnixSec = () => Math.floor(Date.now() / 1000);
 
-  // First-launch: start initial run if no current run
-  if (!game.saveFile.currentRun) {
-    game.dispatch({ type: "START_NEW_RUN", nowUnixSec: nowUnixSec() });
-  }
-
-  // Start HUD overlay after main scene is ready
   game.events.on(Phaser.Core.Events.READY, () => {
+    if (game.isFreshInstall) {
+      // First-time visitor: show the welcome overlay. IntroScene's Play button
+      // starts the run + HUD. Do not auto-start a run yet.
+      game.scene.start("IntroScene");
+      return;
+    }
+    if (!game.saveFile.currentRun) {
+      game.dispatch({ type: "START_NEW_RUN", nowUnixSec: nowUnixSec() });
+    }
     game.scene.start("HudScene");
     game.scene.start("MainScene");
     game.scene.bringToTop("HudScene");
