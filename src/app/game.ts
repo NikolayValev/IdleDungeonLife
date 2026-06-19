@@ -4,6 +4,7 @@ import type { GameEvent } from "../core/events";
 import { reduceGame, reconcileOffline } from "../core/reducer";
 import { saveToDisk, loadFromDisk, freshSave } from "../core/save";
 import { advanceSubCharacters } from "../sim/subRunner";
+import { advanceRun } from "../sim/step";
 import { LocalArrayAnalyticsSink, setAnalyticsSink } from "../core/analytics";
 
 /**
@@ -12,6 +13,9 @@ import { LocalArrayAnalyticsSink, setAnalyticsSink } from "../core/analytics";
  */
 export class GameController extends Phaser.Game {
   saveFile: SaveFile;
+  demoActive = false;
+  readonly isFreshInstall: boolean;
+  private _demoSnapshot: SaveFile | null = null;
 
   constructor(config: Phaser.Types.Core.GameConfig) {
     super(config);
@@ -19,6 +23,7 @@ export class GameController extends Phaser.Game {
 
     const now = Math.floor(Date.now() / 1000);
     const existing = loadFromDisk();
+    this.isFreshInstall = existing === null;
 
     if (existing) {
       // Reconcile offline progression (main run), then auto-play subs offline.
@@ -34,7 +39,7 @@ export class GameController extends Phaser.Game {
   dispatch(event: GameEvent): void {
     try {
       this.saveFile = reduceGame(this.saveFile, event);
-      saveToDisk(this.saveFile);
+      if (!this.demoActive) saveToDisk(this.saveFile);
     } catch (err) {
       console.error("[GameController] dispatch error for event", event.type, err);
       // Preserve current save state — do not corrupt disk on reducer failure
@@ -61,8 +66,33 @@ export class GameController extends Phaser.Game {
     this.dispatch({ type: "UNLOCK_JOB", jobId });
   }
 
+  advanceTime(ms: number): SaveFile {
+    const seconds = Math.max(1, Math.round(ms / 1000));
+    const start =
+      this.saveFile.currentRun?.lastTickUnixSec ?? this.saveFile.updatedAtUnixSec;
+    const advanced = advanceRun(this.saveFile, start, seconds, 1);
+    this.saveFile = advanceSubCharacters(advanced, start + seconds, 10);
+    if (!this.demoActive) saveToDisk(this.saveFile);
+    return this.saveFile;
+  }
+
+  enterDemo(nowUnixSec: number): void {
+    this._demoSnapshot = this.saveFile;
+    this.demoActive = true;
+    this.saveFile = freshSave(nowUnixSec);
+  }
+
+  exitDemo(): void {
+    if (this._demoSnapshot) this.saveFile = this._demoSnapshot;
+    this._demoSnapshot = null;
+    this.demoActive = false;
+    saveToDisk(this.saveFile);
+  }
+
   /** Auto-persist every 10 seconds in case of crash. */
   private _persistLoop(): void {
-    setInterval(() => saveToDisk(this.saveFile), 10_000);
+    setInterval(() => {
+      if (!this.demoActive) saveToDisk(this.saveFile);
+    }, 10_000);
   }
 }
