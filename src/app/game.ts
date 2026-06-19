@@ -54,7 +54,7 @@ export class GameController extends Phaser.Game {
     const next = advanceSubCharacters(this.saveFile, nowUnixSec, 1);
     if (next === this.saveFile) return false;
     this.saveFile = next;
-    saveToDisk(this.saveFile);
+    if (!this.demoActive) saveToDisk(this.saveFile);
     return true;
   }
 
