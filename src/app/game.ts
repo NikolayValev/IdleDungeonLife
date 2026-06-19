@@ -77,6 +77,7 @@ export class GameController extends Phaser.Game {
   }
 
   enterDemo(nowUnixSec: number): void {
+    if (this.demoActive) return;
     this._demoSnapshot = this.saveFile;
     this.demoActive = true;
     this.saveFile = freshSave(nowUnixSec);
@@ -86,7 +87,7 @@ export class GameController extends Phaser.Game {
     if (this._demoSnapshot) this.saveFile = this._demoSnapshot;
     this._demoSnapshot = null;
     this.demoActive = false;
-    saveToDisk(this.saveFile);
+    if (!this.isFreshInstall) saveToDisk(this.saveFile);
   }
 
   /** Auto-persist every 10 seconds in case of crash. */
