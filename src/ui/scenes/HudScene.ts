@@ -56,7 +56,7 @@ export class HudScene extends BaseScene {
     });
 
     const help = this.add
-      .text(LAYOUT.width - 18, 4, "?", {
+      .text(LAYOUT.width - 11, 4, "?", {
         fontFamily: FONTS.body,
         fontSize: "16px",
         color: COLORS.textSecondary,
@@ -140,12 +140,14 @@ export class HudScene extends BaseScene {
         ? COLORS.vitalityMid
         : COLORS.vitalityLow;
 
-    const vitalText = this.add.text(
-      240,
-      4,
-      `Vitality: ${Math.floor(vitality)} (${stage})`,
-      { ...textStyle, color: vitalColor }
-    );
+    const vitalText = this.add
+      .text(
+        LAYOUT.width - 24,
+        4,
+        `Vitality: ${Math.floor(vitality)} (${stage})`,
+        { ...textStyle, color: vitalColor }
+      )
+      .setOrigin(1, 0);
     (vitalText as any).__hudElement = true;
   }
 
