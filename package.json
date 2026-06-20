@@ -11,6 +11,7 @@
     "dev:stop": "powershell -ExecutionPolicy Bypass -File scripts/dev-stop.ps1",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
+    "screenshots": "playwright test --config playwright.screenshots.config.ts",
     "test:e2e:headed": "playwright test --headed",
     "lint": "eslint src",
     "format": "prettier --write src tests/unit",

@@ -19,7 +19,8 @@ test-results/
 test-out*.txt
 test-output*.txt
 test-results*.txt
-artifacts/
+artifacts/*
+!artifacts/screenshots/
 
 # Editor directories and files
 .vscode/*
