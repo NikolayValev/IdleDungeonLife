@@ -47,11 +47,17 @@ test("capture canonical screenshots", async ({ page }) => {
   });
   await shot(page, "03-mid-dungeon");
 
-  // 4. Deep / late dungeon — bone_cathedral (depthIndex 10)
-  await page.evaluate(() => {
+  // 4. Deep / late dungeon — relic_vault (depthIndex 5)
+  // sunken_archive (duration 95 s) is still active; advance 96 s to complete it,
+  // then add gold and start a genuinely deeper dungeon so this shot differs.
+  await page.evaluate(async () => {
     const w = window as any;
-    w.__debug.unlockDungeon("bone_cathedral");
-    w.__test.dispatch({ type: "START_DUNGEON", dungeonId: "bone_cathedral", nowUnixSec: Math.floor(Date.now() / 1000) });
+    // Complete the sunken_archive that was started in shot 03
+    w.__test.advanceTime(96_000);
+    // Fund the run and unlock + enter a deeper dungeon
+    w.__test.dispatch({ type: "DEBUG_ADD_RESOURCES", gold: 500 });
+    w.__debug.unlockDungeon("relic_vault");
+    w.__test.dispatch({ type: "START_DUNGEON", dungeonId: "relic_vault", nowUnixSec: Math.floor(Date.now() / 1000) });
     w.__test.startScene("DungeonsScene");
   });
   await shot(page, "04-deep-dungeon");
