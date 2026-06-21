@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { captureBrowserErrors, expectNoBrowserErrors, getSceneTexts, getState, waitForHooks } from "./helpers";
+import { captureBrowserErrors, emitSceneButtonByText, expectNoBrowserErrors, getSceneTexts, getState, waitForHooks } from "./helpers";
 
 async function freshVisit(page: Page): Promise<void> {
   await page.goto("/");
@@ -26,11 +26,7 @@ test.describe("intro + demo", () => {
 
     const before = await page.evaluate(() => localStorage.getItem("idledungeonlife_save"));
 
-    await page.evaluate(() => {
-      const scene = (window as any).__game.scene.getScene("IntroScene");
-      const btn = scene.children.list.find((c: { text?: string }) => c.text === "[ Watch demo ]");
-      btn.emit("pointerup");
-    });
+    await emitSceneButtonByText(page, "IntroScene", "[ Watch demo ]");
     await page.waitForTimeout(800);
 
     let state = await getState(page);
@@ -38,11 +34,7 @@ test.describe("intro + demo", () => {
     const during = await page.evaluate(() => localStorage.getItem("idledungeonlife_save"));
     expect(during).toBe(before);
 
-    await page.evaluate(() => {
-      const scene = (window as any).__game.scene.getScene("DemoScene");
-      const btn = scene.children.list.find((c: { text?: string }) => c.text === "[ Skip demo ]");
-      btn.emit("pointerup");
-    });
+    await emitSceneButtonByText(page, "DemoScene", "[ Skip demo ]");
     await page.waitForTimeout(500);
 
     state = await getState(page);
@@ -52,11 +44,7 @@ test.describe("intro + demo", () => {
 
   test("play button starts a real run", async ({ page }) => {
     await freshVisit(page);
-    await page.evaluate(() => {
-      const scene = (window as any).__game.scene.getScene("IntroScene");
-      const btn = scene.children.list.find((c: { text?: string }) => c.text === "[ Play ]");
-      btn.emit("pointerup");
-    });
+    await emitSceneButtonByText(page, "IntroScene", "[ Play ]");
     await page.waitForTimeout(500);
     const state = await getState(page);
     expect(state.activeScenes).toContain("MainScene");
