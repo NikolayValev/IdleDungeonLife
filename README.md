@@ -25,6 +25,22 @@ mobile with [Capacitor](https://capacitorjs.com/).
 - **Offline progression.** Time keeps passing while you're away (capped), with a
   welcome-back summary on return.
 
+## Play it
+
+- **Live:** <https://idle-dungeon-life.vercel.app>
+- **Watch the demo:** open the game and choose **Watch demo** on the welcome screen — it auto-plays one full lifetime (job, dungeon dives, death, legacy) in a sandbox that never touches your save.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Welcome](artifacts/screenshots/01-intro.png) | ![Early life](artifacts/screenshots/02-early-chapel.png) |
+| ![Dungeon dive](artifacts/screenshots/03-mid-dungeon.png) | ![Deep dungeon](artifacts/screenshots/04-deep-dungeon.png) |
+| ![Talents](artifacts/screenshots/05-talents.png) | ![Codex](artifacts/screenshots/06-codex.png) |
+| ![Sub-characters](artifacts/screenshots/07-subs.png) | ![Death & legacy](artifacts/screenshots/08-death-legacy.png) |
+
+Screenshots are generated with `npm run screenshots` (Playwright drives the game through canonical states).
+
 ## Tech stack
 
 | Concern        | Choice                                  |
