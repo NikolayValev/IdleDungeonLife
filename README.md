@@ -27,7 +27,7 @@ mobile with [Capacitor](https://capacitorjs.com/).
 
 ## Play it
 
-- **Live:** <https://idle-dungeon-life.vercel.app>
+- **Live:** <https://dungeonlife.nikolayvalev.com/>
 - **Watch the demo:** open the game and choose **Watch demo** on the welcome screen — it auto-plays one full lifetime (job, dungeon dives, death, legacy) in a sandbox that never touches your save.
 
 ## Screenshots

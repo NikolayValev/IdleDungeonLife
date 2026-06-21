@@ -10,6 +10,15 @@ import {
   resetApp,
 } from "./helpers";
 
+/** DungeonsScene renders the active dungeon's countdown as a bare `[Ns]` label. */
+function dungeonRemainingSeconds(texts: string[]): number {
+  const line = texts.find((entry) => /^\[\d+s\]$/.test(entry.trim()));
+  if (!line) {
+    throw new Error(`Could not find dungeon countdown ([Ns]) in: ${texts.join(" | ")}`);
+  }
+  return Number(line.trim().match(/(\d+)s/)![1]);
+}
+
 test.describe("active run flow", () => {
   test("updates timers and supports dungeon, inventory, and talent actions", async ({
     page,
@@ -50,14 +59,12 @@ test.describe("active run flow", () => {
     state = await getState(page);
     expect(state.run?.dungeon?.dungeonId).toBe("abandoned_chapel");
 
-    const dungeonTimerBefore = extractSeconds(
-      await getSceneTexts(page, "DungeonsScene"),
-      "\u23f1"
+    const dungeonTimerBefore = dungeonRemainingSeconds(
+      await getSceneTexts(page, "DungeonsScene")
     );
     await page.waitForTimeout(2_200);
-    const dungeonTimerAfter = extractSeconds(
-      await getSceneTexts(page, "DungeonsScene"),
-      "\u23f1"
+    const dungeonTimerAfter = dungeonRemainingSeconds(
+      await getSceneTexts(page, "DungeonsScene")
     );
     expect(dungeonTimerAfter).toBeLessThan(dungeonTimerBefore);
 
@@ -232,7 +239,12 @@ test.describe("active run flow", () => {
 
     let talentTexts = await getSceneTexts(page, "TalentsScene");
     expect(talentTexts).toContain("Initiate's Resolve");
-    expect(talentTexts).toContain("\u2713");
+
+    // Unlock the first (Core) talent with essence gained this run; it then shows "[done]".
+    await emitSceneButtonByText(page, "TalentsScene", "[ Unlock ]");
+    await page.waitForTimeout(300);
+    talentTexts = await getSceneTexts(page, "TalentsScene");
+    expect(talentTexts).toContain("[done]");
 
     await emitSceneButtonByText(page, "TalentsScene", "[ Abyss ]");
     await page.waitForTimeout(300);
