@@ -37,7 +37,7 @@ export class IntroScene extends BaseScene {
       .text(
         LAYOUT.width / 2,
         y,
-        "An idle RPG. Send an adventurer into ancient dungeons; they age in real time, gather traits, and push deeper until their lifespan runs out. Death is progress — legacy ash funds the next life.",
+        "An idle RPG. Send an adventurer into ancient dungeons; they age in real time, gather traits, and push deeper until their lifespan runs out. Death is progress - legacy ash funds the next life.",
         {
           fontFamily: FONTS.body,
           fontSize: "13px",

@@ -20,6 +20,6 @@ export function buildDemoScenario(): DemoBeat[] {
     { kind: "switchScene", sceneKey: "TalentsScene", caption: "Talents reshape the build across a lifetime." },
     { kind: "advanceTime", ms: 600_000, caption: "The years take their toll." },
     { kind: "dispatch", event: () => ({ type: "DEBUG_KILL_RUN" }), caption: "Lifespan spent." },
-    { kind: "switchScene", sceneKey: "DeathScene", caption: "Death is progress — legacy ash endures." },
+    { kind: "switchScene", sceneKey: "DeathScene", caption: "Death is progress - legacy ash endures." },
   ];
 }
