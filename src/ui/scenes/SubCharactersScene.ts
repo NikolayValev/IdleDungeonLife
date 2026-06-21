@@ -83,7 +83,7 @@ export class SubCharactersScene extends BaseScene {
   /** One occupied sub-character card: identity, run status, and a context action. */
   private drawSubCard(sub: SubCharacter, y: number): void {
     const run = sub.currentRun;
-    const pathStr = sub.path ? sub.path.charAt(0).toUpperCase() + sub.path.slice(1) : "—";
+    const pathStr = sub.path ? sub.path.charAt(0).toUpperCase() + sub.path.slice(1) : "-";
 
     this.add.rectangle(LAYOUT.width / 2, y + 34, LAYOUT.cardWidth, 72, 0x1a1a2e, 0.95);
 
@@ -122,7 +122,7 @@ export class SubCharactersScene extends BaseScene {
 
     // Status line + context action.
     if (!run) {
-      this.add.text(P + 8, y + 38, "Status: Idle — not running", {
+      this.add.text(P + 8, y + 38, "Status: Idle - not running", {
         fontFamily: FONTS.body,
         fontSize: "11px",
         color: COLORS.textMuted,
@@ -216,7 +216,7 @@ export class SubCharactersScene extends BaseScene {
       .text(
         cx,
         y,
-        `Defeat the final dungeon —\n${FINAL_DUNGEON.name} —\nwith your first character to recruit\nsub-characters.`,
+        `Defeat the final dungeon -\n${FINAL_DUNGEON.name} -\nwith your first character to recruit\nsub-characters.`,
         {
           fontFamily: FONTS.body,
           fontSize: "14px",

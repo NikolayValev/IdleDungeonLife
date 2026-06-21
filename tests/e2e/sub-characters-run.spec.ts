@@ -21,7 +21,7 @@ test.describe("sub-character runs", () => {
     });
 
     let texts = await getSceneTexts(page, "SubCharactersScene");
-    expect(texts.some((s) => s.includes("Idle — not running"))).toBe(true);
+    expect(texts.some((s) => s.includes("Idle - not running"))).toBe(true);
 
     // Start the run.
     await emitSceneButtonByText(page, "SubCharactersScene", "[ Start Run ]");
@@ -62,7 +62,7 @@ test.describe("sub-character runs", () => {
     expect(sub.currentRun).toBeNull(); // back to Idle
 
     texts = await getSceneTexts(page, "SubCharactersScene");
-    expect(texts.some((s) => s.includes("Idle — not running"))).toBe(true);
+    expect(texts.some((s) => s.includes("Idle - not running"))).toBe(true);
 
     expectNoBrowserErrors(errors);
   });
